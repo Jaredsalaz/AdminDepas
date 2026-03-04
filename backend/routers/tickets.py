@@ -9,7 +9,7 @@ router = APIRouter(
     tags=["tickets"]
 )
 
-@router.get("/", response_model=List[schemas.TicketDetalle])
+@router.get("", response_model=List[schemas.TicketDetalle])
 def read_tickets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # Join manual para poder construir el esquema detallado fácilmente
     db_tickets = db.query(models.TicketMantenimiento).offset(skip).limit(limit).all()
@@ -45,7 +45,7 @@ def read_ticket(ticket_id: int, db: Session = Depends(get_db)):
         "edificio_nombre": t.departamento.edificio.nombre
     }
 
-@router.post("/", response_model=schemas.TicketMantenimiento)
+@router.post("", response_model=schemas.TicketMantenimiento)
 def create_ticket(ticket: schemas.TicketMantenimientoCreate, db: Session = Depends(get_db)):
     departamento = db.query(models.Departamento).filter(models.Departamento.id == ticket.departamento_id).first()
     if not departamento:

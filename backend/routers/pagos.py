@@ -15,13 +15,13 @@ router = APIRouter(
     dependencies=[Depends(require_admin)]
 )
 
-@router.get("/", response_model=List[schemas.Pago])
+@router.get("", response_model=List[schemas.Pago])
 def read_pagos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # Devuelve los pagos más recientes primero
     pagos = db.query(models.Pago).order_by(desc(models.Pago.fecha_pago)).offset(skip).limit(limit).all()
     return pagos
 
-@router.post("/", response_model=schemas.Pago)
+@router.post("", response_model=schemas.Pago)
 def create_pago(pago: schemas.PagoCreate, db: Session = Depends(get_db)):
     # Verificar que el contrato existe
     contrato = db.query(models.Contrato).filter(models.Contrato.id == pago.contrato_id).first()

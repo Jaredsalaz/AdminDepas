@@ -10,7 +10,7 @@ router = APIRouter(
     tags=["contratos"]
 )
 
-@router.get("/", response_model=List[schemas.ContratoDetalle])
+@router.get("", response_model=List[schemas.ContratoDetalle])
 def read_contratos_activos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # Útil para el formulario de registrar nuevo pago
     contratos_activos = db.query(models.Contrato).filter(models.Contrato.estado == "Activo").offset(skip).limit(limit).all()
@@ -32,7 +32,7 @@ def read_contratos_activos(skip: int = 0, limit: int = 100, db: Session = Depend
         })
     return detalles
 
-@router.post("/", response_model=schemas.Contrato)
+@router.post("", response_model=schemas.Contrato)
 def create_contrato(contrato: schemas.ContratoCreate, db: Session = Depends(get_db)):
     # 1. Verificar Inquilino
     inquilino = db.query(models.Inquilino).filter(models.Inquilino.id == contrato.inquilino_id).first()

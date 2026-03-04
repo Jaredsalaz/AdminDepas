@@ -9,7 +9,7 @@ router = APIRouter(
     tags=["inquilinos"]
 )
 
-@router.get("/", response_model=List[schemas.Inquilino])
+@router.get("", response_model=List[schemas.Inquilino])
 def read_inquilinos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     inquilinos = db.query(models.Inquilino).offset(skip).limit(limit).all()
     
@@ -57,7 +57,7 @@ def read_inquilino_contrato_activo(inquilino_id: int, db: Session = Depends(get_
         "renta_mensual": contrato.departamento.renta_mensual
     }
 
-@router.post("/", response_model=schemas.Inquilino)
+@router.post("", response_model=schemas.Inquilino)
 def create_inquilino(inquilino: schemas.InquilinoCreate, db: Session = Depends(get_db)):
     # Opcional: Validar si el correo ya existe
     if inquilino.correo:

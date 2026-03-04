@@ -9,12 +9,12 @@ router = APIRouter(
     tags=["edificios"]
 )
 
-@router.get("/", response_model=List[schemas.Edificio])
+@router.get("", response_model=List[schemas.Edificio])
 def read_edificios(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     edificios = db.query(models.Edificio).offset(skip).limit(limit).all()
     return edificios
 
-@router.post("/", response_model=schemas.Edificio)
+@router.post("", response_model=schemas.Edificio)
 def create_edificio(edificio: schemas.EdificioCreate, db: Session = Depends(get_db)):
     db_edificio = models.Edificio(nombre=edificio.nombre, direccion=edificio.direccion)
     db.add(db_edificio)
