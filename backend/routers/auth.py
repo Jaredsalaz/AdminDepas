@@ -4,15 +4,19 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
+import os
+from dotenv import load_dotenv
 from typing import List
 
 from database import get_db
 import models, schemas
 
+load_dotenv()
+
 # SECURITY CONFIG
-SECRET_KEY = "super_secret_famesto_key_2026" # En producción, mover a .env
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
+SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_famesto_key_2026")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
