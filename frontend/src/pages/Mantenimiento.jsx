@@ -29,8 +29,8 @@ export default function Mantenimiento() {
     const fetchData = async () => {
         try {
             const [ticketsRes, edifRes] = await Promise.all([
-                api.get('/tickets/'),
-                api.get('/edificios/')
+                api.get('/tickets'),
+                api.get('/edificios')
             ]);
 
             // Normalizar el estado por si hay datos viejos en BD sin tilde
