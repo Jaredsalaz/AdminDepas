@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+sqlite3.db
+database.db
+depaadmin.db
+.env
+.pytest_cache/

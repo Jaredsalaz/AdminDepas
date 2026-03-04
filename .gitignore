@@ -1,0 +1,7 @@
+node_modules/
+.env
+# Ignore nested directories' ignored files
+backend/venv/
+backend/__pycache__/
+backend/*.db
+frontend/node_modules/

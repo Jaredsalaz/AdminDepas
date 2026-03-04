@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* 
+  En Tailwind v4, la configuración de tema, colores y sombras personalizadas 
+  se realiza directamente en CSS con la directiva @theme 
+*/
+@theme {
+  --color-primary-50: #f0fdf4;
+  --color-primary-100: #dcfce7;
+  --color-primary-500: #22c55e;
+  --color-primary-600: #16a34a;
+  --color-primary-900: #14532d;
+
+  --color-dark-bg: #121212;
+  --color-dark-surface: #1e1e1e;
+  --color-dark-glass: rgba(30, 30, 30, 0.7);
+
+  --color-light-bg: #f8fafc;
+  --color-light-surface: #ffffff;
+  --color-light-glass: rgba(255, 255, 255, 0.7);
+
+  --shadow-glass-light: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-glass-dark: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+@layer base {
+  body {
+    @apply bg-light-bg text-gray-900 transition-colors duration-300;
+  }
+
+  /* Modo oscuro manual con la clase .dark en el tag html/body */
+  .dark body {
+    @apply bg-dark-bg text-gray-100;
+  }
+}
+
+@layer components {
+
+  /* Panel principal con efecto Glassmorphism */
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-glass-light rounded-2xl transition-all duration-300;
+  }
+
+  .dark .glass-panel {
+    @apply bg-dark-surface/80 border-gray-700/50 shadow-glass-dark;
+  }
+
+  /* Botones Premium */
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-500 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/30 active:translate-y-0 transition-all duration-200 ease-in-out;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-transparent text-gray-700 border-2 border-gray-300 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-in-out;
+  }
+
+  .dark .btn-secondary {
+    @apply text-gray-300 border-gray-600 hover:bg-gray-800 hover:border-gray-500;
+  }
+}
