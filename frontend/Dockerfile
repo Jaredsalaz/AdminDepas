@@ -3,12 +3,12 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copiar dependencias primero para aprovechar cache
-COPY package*.json ./
+# Copiar dependencias desde la subcarpeta frontend (el build context es la raíz del repo)
+COPY frontend/package*.json ./
 RUN npm install
 
-# Copiar el resto del código
-COPY . .
+# Copiar el resto del código del frontend
+COPY frontend/ .
 
 # La variable de entorno se inyecta en tiempo de build
 ARG VITE_API_URL
@@ -23,15 +23,8 @@ FROM nginx:alpine
 # Copiar la app construida al servidor web
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Configuración de Nginx para React Router (redirigir todas las rutas al index.html)
-RUN echo 'server { \
-    listen 80; \
-    location / { \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    try_files $uri $uri/ /index.html; \
-    } \
-    }' > /etc/nginx/conf.d/default.conf
+# Configuración de Nginx para React Router
+RUN printf 'server {\n    listen 80;\n    location / {\n        root /usr/share/nginx/html;\n        index index.html;\n        try_files $uri $uri/ /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
