@@ -26,7 +26,8 @@ export const AuthProvider = ({ children }) => {
             const { data } = await api.get('/auth/me');
             setUser(data);
 
-            if (data.rol === 'SuperAdmin') {
+            const userRole = data.rol?.toLowerCase();
+            if (userRole === 'superadmin') {
                 // SuperAdmin: cargar lista de empresas disponibles
                 const empresasRes = await api.get('/auth/empresas-disponibles');
                 setEmpresasDisponibles(empresasRes.data);

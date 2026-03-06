@@ -3,9 +3,10 @@ import { useAuth } from './AuthContext';
 export function usePermissions() {
     const { user } = useAuth();
 
-    const isSuperAdmin = user?.rol === 'SuperAdmin';
-    const isAdmin = user?.rol === 'Administrador' || isSuperAdmin; // SuperAdmin tiene permisos de Admin
-    const isAssistant = user?.rol === 'Asistente';
+    const userRole = user?.rol?.toLowerCase();
+    const isSuperAdmin = userRole === 'superadmin';
+    const isAdmin = userRole === 'administrador' || isSuperAdmin;
+    const isAssistant = userRole === 'asistente';
 
     return {
         isSuperAdmin,

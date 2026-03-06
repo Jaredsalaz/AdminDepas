@@ -50,8 +50,9 @@ export default function Inquilinos() {
 
     const fetchInquilinos = async () => {
         try {
+            setLoading(true);
             const { data } = await api.get('/inquilinos');
-            setInquilinos(data);
+            setInquilinos(data.items || data || []);
         } catch (error) {
             console.error("Error fetching inquilinos:", error);
         } finally {

@@ -66,18 +66,20 @@ export default function Dashboard() {
                     api.get('/tickets')
                 ]);
 
-                const edificios = edificiosRes.data.items || edificiosRes.data;
-                const tickets = ticketsRes.data;
+                const edificios = edificiosRes.data?.items || edificiosRes.data || [];
+                const tickets = ticketsRes.data?.items || ticketsRes.data || [];
 
                 let total = 0;
                 let ocupados = 0;
 
-                edificios.forEach(edificio => {
-                    total += edificio.departamentos?.length || 0;
-                    ocupados += edificio.departamentos?.filter(d => d.estado === 'Rentado').length || 0;
-                });
+                if (Array.isArray(edificios)) {
+                    edificios.forEach(edificio => {
+                        total += edificio.departamentos?.length || 0;
+                        ocupados += edificio.departamentos?.filter(d => d.estado === 'Rentado').length || 0;
+                    });
+                }
 
-                const abiertos = tickets.filter(t => t.estado !== 'Resuelto').length;
+                const abiertos = Array.isArray(tickets) ? tickets.filter(t => t.estado !== 'Resuelto').length : 0;
 
                 setStats({
                     totalDepas: total,

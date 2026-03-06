@@ -41,10 +41,11 @@ export default function Mantenimiento() {
             ]);
 
             // Normalizar el estado por si hay datos viejos en BD sin tilde
-            const normalizedTickets = ticketsRes.data.map(t => ({
+            const items = ticketsRes.data?.items || ticketsRes.data || [];
+            const normalizedTickets = Array.isArray(items) ? items.map(t => ({
                 ...t,
                 estado: t.estado === 'En Reparacion' ? 'En Reparación' : t.estado
-            }));
+            })) : [];
 
             setTickets(normalizedTickets);
 

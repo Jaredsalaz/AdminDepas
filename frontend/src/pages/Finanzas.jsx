@@ -62,14 +62,15 @@ export default function Finanzas() {
                 api.get('/edificios')
             ]);
 
-            setPagos(pagosRes.data.items);
-            setTotalItems(pagosRes.data.total);
-            setTotalPages(Math.ceil(pagosRes.data.total / limit));
-            setContratosActivos(contratosRes.data);
-            setEdificios(edificiosRes.data.items || []);
+            setPagos(pagosRes.data?.items || []);
+            setTotalItems(pagosRes.data?.total || 0);
+            setTotalPages(Math.ceil((pagosRes.data?.total || 0) / limit));
+            setContratosActivos(contratosRes.data?.items || contratosRes.data || []);
+            setEdificios(edificiosRes.data?.items || edificiosRes.data || []);
 
-            // Calcular ingresos (suma global no siempre es posible si solo traemos 15, esto debe venir del backend o limitarse a los visibles. Asumimos suma visible por ahora para demo, o mejor no tocar, solo sumar visibles)
-            const total = pagosRes.data.items.reduce((acc, curr) => acc + parseFloat(curr.monto) + parseFloat(curr.recargos || 0), 0);
+            // Calcular ingresos (suma global no siempre es posible si solo traemos 15, esto debe venir del backend o limitarse a los visibles)
+            const items = pagosRes.data?.items || [];
+            const total = items.reduce((acc, curr) => acc + parseFloat(curr.monto) + parseFloat(curr.recargos || 0), 0);
             setIngresosTotales(total);
         } catch (error) {
             console.error("Error fetching finanzas:", error);

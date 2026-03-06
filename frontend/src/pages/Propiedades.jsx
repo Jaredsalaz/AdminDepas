@@ -34,10 +34,11 @@ export default function Propiedades() {
         try {
             setLoading(true);
             const { data } = await api.get(`/edificios?page=${page}&per_page=9`);
-            setEdificios(data.items);
-            setCurrentPage(data.page);
-            setTotalPages(data.pages);
-            setTotalEdificios(data.total);
+            const items = data.items || data || [];
+            setEdificios(Array.isArray(items) ? items : []);
+            setCurrentPage(data.page || 1);
+            setTotalPages(data.pages || 1);
+            setTotalEdificios(data.total || 0);
         } catch (error) {
             console.error("Error fetching edificios:", error);
         } finally {

@@ -23,6 +23,18 @@ export default function Configuracion() {
     const [editingPasswordUser, setEditingPasswordUser] = useState(null);
     const [newPasswordValue, setNewPasswordValue] = useState('');
 
+    // Perfil State
+    const [profileData, setProfileData] = useState({ nombre: '', email: '' });
+
+    useEffect(() => {
+        if (user) {
+            setProfileData({
+                nombre: user.nombre || '',
+                email: user.email || ''
+            });
+        }
+    }, [user]);
+
     // Notificaciones State
     const [notificacionesPreferencias, setNotificacionesPreferencias] = useState(() => {
         const saved = localStorage.getItem('notificacionesPreferencias');
@@ -165,11 +177,21 @@ export default function Configuracion() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label>
-                                    <input type="text" defaultValue={user?.nombre || "Cargando..."} className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 transition-all" />
+                                    <input
+                                        type="text"
+                                        value={profileData.nombre}
+                                        onChange={(e) => setProfileData({ ...profileData, nombre: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Correo Electrónico</label>
-                                    <input type="email" defaultValue={user?.email || "Cargando..."} className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 transition-all" />
+                                    <input
+                                        type="text"
+                                        value={profileData.email}
+                                        onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                                    />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol en el Sistema</label>

@@ -26,9 +26,11 @@ export default function Cobranza() {
             setCargando(true);
             const skip = (page - 1) * limit;
             const res = await api.get(`/cobranza/estado_cuenta?skip=${skip}&limit=${limit}`);
-            setEstadoCuenta(res.data.items);
-            setTotalItems(res.data.total);
-            setTotalPages(Math.ceil(res.data.total / limit));
+            const items = res.data?.items || res.data || [];
+            const total = res.data?.total || 0;
+            setEstadoCuenta(Array.isArray(items) ? items : []);
+            setTotalItems(total);
+            setTotalPages(Math.ceil(total / limit));
         } catch (error) {
             console.error("Error al obtener el estado de cuenta", error);
         } finally {
