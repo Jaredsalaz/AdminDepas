@@ -12,7 +12,8 @@ import { useToast } from '../components/Toast';
 const statusConfig = {
     'Pendiente': { icon: Clock, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' },
     'En Reparación': { icon: Wrench, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-    'Resuelto': { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' }
+    'Resuelto': { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+    'Cancelado': { icon: X, color: 'text-gray-500', bg: 'bg-gray-500/10', border: 'border-gray-500/20' }
 };
 
 export default function Mantenimiento() {
@@ -163,7 +164,7 @@ export default function Mantenimiento() {
         t.departamento_numero.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const columns = ['Pendiente', 'En Reparación', 'Resuelto'];
+    const columns = ['Pendiente', 'En Reparación', 'Resuelto', 'Cancelado'];
 
     return (
         <div className="space-y-6 flex flex-col h-[calc(100vh-8rem)]">
@@ -339,6 +340,7 @@ export default function Mantenimiento() {
                                     <option value="Pendiente">Pendiente</option>
                                     <option value="En Reparación">En Reparación</option>
                                     <option value="Resuelto">Resuelto</option>
+                                    <option value="Cancelado">Cancelado</option>
                                 </select>
                             </div>
                             {canEditFinances && (

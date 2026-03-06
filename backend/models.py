@@ -111,7 +111,7 @@ class TicketMantenimiento(Base):
     id = Column(Integer, primary_key=True, index=True)
     departamento_id = Column(Integer, ForeignKey("departamentos.id"), nullable=False)
     descripcion = Column(Text, nullable=False)
-    estado = Column(String, default="Pendiente")  # Pendiente, En Reparacion, Resuelto
+    estado = Column(String, default="Pendiente")  # Pendiente, En Reparacion, Resuelto, Cancelado
     costo_reparacion = Column(Numeric(10, 2), default=0)
     fecha_reporte = Column(DateTime, default=datetime.utcnow)
     
