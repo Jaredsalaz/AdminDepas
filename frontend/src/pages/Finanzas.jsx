@@ -1,13 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, Plus, Search, CheckCircle, Clock, FileText, ArrowUpRight, ArrowDownRight, X, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import EmpresaSelector from '../components/EmpresaSelector';
 import api from '../api';
+import { formatMoney } from '../utils/formatMoney';
+import Modal from '../components/Modal';
+import { useToast } from '../components/Toast';
 
 export default function Finanzas() {
+    const { empresaActiva } = useAuth();
+    const toast = useToast();
     const [pagos, setPagos] = useState([]);
     const [contratosActivos, setContratosActivos] = useState([]);
+    const [edificios, setEdificios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Pagination & Filters State
+    const [page, setPage] = useState(1);
+    const [limit] = useState(15);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [filtros, setFiltros] = useState({
+        fecha_inicio: '',
+        fecha_fin: '',
+        concepto: '',
+        edificio_id: ''
+    });
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,19 +44,36 @@ export default function Finanzas() {
     });
 
     const fetchData = async () => {
+        setLoading(true);
         try {
-            const [pagosRes, contratosRes] = await Promise.all([
-                api.get('/pagos'),
-                api.get('/contratos')
-            ]);
-            setPagos(pagosRes.data);
-            setContratosActivos(contratosRes.data);
+            // Construir Query String
+            const skip = (page - 1) * limit;
+            const params = new URLSearchParams({ skip, limit });
 
-            // Calcular ingresos (suma de montos de pagos completados)
-            const total = pagosRes.data.reduce((acc, curr) => acc + parseFloat(curr.monto) + parseFloat(curr.recargos || 0), 0);
+            if (searchTerm) params.append('search', searchTerm);
+            if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio + "T00:00:00");
+            if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin + "T23:59:59");
+            if (filtros.concepto) params.append('concepto', filtros.concepto);
+            if (filtros.edificio_id) params.append('edificio_id', filtros.edificio_id);
+
+            const [pagosRes, contratosRes, edificiosRes] = await Promise.all([
+                api.get(`/pagos?${params.toString()}`),
+                api.get('/contratos'),
+                api.get('/edificios')
+            ]);
+
+            setPagos(pagosRes.data.items);
+            setTotalItems(pagosRes.data.total);
+            setTotalPages(Math.ceil(pagosRes.data.total / limit));
+            setContratosActivos(contratosRes.data);
+            setEdificios(edificiosRes.data.items || []);
+
+            // Calcular ingresos (suma global no siempre es posible si solo traemos 15, esto debe venir del backend o limitarse a los visibles. Asumimos suma visible por ahora para demo, o mejor no tocar, solo sumar visibles)
+            const total = pagosRes.data.items.reduce((acc, curr) => acc + parseFloat(curr.monto) + parseFloat(curr.recargos || 0), 0);
             setIngresosTotales(total);
         } catch (error) {
             console.error("Error fetching finanzas:", error);
+            toast.error("Error al cargar finanzas");
         } finally {
             setLoading(false);
         }
@@ -43,7 +81,8 @@ export default function Finanzas() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [empresaActiva?.id, page, searchTerm, filtros]);
 
     // Cuando selecciona un contrato, autocompletar el monto de la renta mensual
     const handleContratoSelect = (contratoId) => {
@@ -72,9 +111,10 @@ export default function Finanzas() {
             await fetchData();
             setIsModalOpen(false);
             setNuevoPago({ contrato_id: '', fecha_correspondiente: new Date().toISOString().split('T')[0], concepto: 'Renta Mensual', monto: '', recargos: '0' });
+            toast.success("Pago registrado exitosamente");
         } catch (error) {
             console.error("Error ingresando pago:", error);
-            alert("Error al registrar el pago");
+            toast.error("Error al registrar el pago");
         } finally {
             setIsSubmitting(false);
         }
@@ -99,7 +139,7 @@ export default function Finanzas() {
             link.parentNode.removeChild(link);
         } catch (error) {
             console.error("Error al descargar PDF:", error);
-            alert("No se pudo descargar el recibo.");
+            toast.error("No se pudo descargar el recibo.");
         }
     };
 
@@ -110,12 +150,12 @@ export default function Finanzas() {
         return `Contrato #${contrato_id}`;
     };
 
-    const filteredPagos = pagos.filter(p =>
-        getDetallesPago(p.contrato_id).toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Eliminar filtro local, el backend ahora filtra de forma nativa.
+    const filteredPagos = pagos;
 
     return (
         <div className="space-y-6">
+            <EmpresaSelector />
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -146,7 +186,7 @@ export default function Finanzas() {
                     <div>
                         <h4 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Ingresos Totales</h4>
                         <p className="text-3xl font-black text-gray-900 dark:text-white mt-1">
-                            ${ingresosTotales.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            {formatMoney(ingresosTotales)}
                         </p>
                     </div>
                 </div>
@@ -184,20 +224,78 @@ export default function Finanzas() {
 
             {/* Historial de Pagos (Tabla) */}
             <div className="glass-panel p-0 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gray-50/50 dark:bg-dark-bg/20">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-gray-50/50 dark:bg-dark-bg/20">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center whitespace-nowrap">
                         <Clock className="w-5 h-5 mr-2 text-primary-500" />
                         Historial de Transacciones
                     </h3>
-                    <div className="relative w-full sm:w-64">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar por inquilino..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                        />
+
+                    {/* Filtros Profesionales Panel */}
+                    <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                        <div className="relative flex-1 min-w-[200px] xl:w-64">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por inquilino..."
+                                value={searchTerm}
+                                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <input
+                                type="date"
+                                value={filtros.fecha_inicio}
+                                onChange={(e) => { setFiltros({ ...filtros, fecha_inicio: e.target.value }); setPage(1); }}
+                                className="px-3 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                                title="Fecha de inicio"
+                            />
+                            <span className="text-gray-400 text-sm">a</span>
+                            <input
+                                type="date"
+                                value={filtros.fecha_fin}
+                                onChange={(e) => { setFiltros({ ...filtros, fecha_fin: e.target.value }); setPage(1); }}
+                                className="px-3 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                                title="Fecha de fin"
+                            />
+
+                            <select
+                                value={filtros.concepto}
+                                onChange={(e) => { setFiltros({ ...filtros, concepto: e.target.value }); setPage(1); }}
+                                className="px-3 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                            >
+                                <option value="">Todos los conceptos</option>
+                                <option value="Renta Mensual">Renta Mensual</option>
+                                <option value="Depósito en Garantía">Depósito en Garantía</option>
+                                <option value="Multa / Intereses">Multa / Intereses</option>
+                            </select>
+
+                            <select
+                                value={filtros.edificio_id}
+                                onChange={(e) => { setFiltros({ ...filtros, edificio_id: e.target.value }); setPage(1); }}
+                                className="px-3 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                            >
+                                <option value="">Todos los edificios</option>
+                                {edificios.map(edificio => (
+                                    <option key={edificio.id} value={edificio.id}>{edificio.nombre}</option>
+                                ))}
+                            </select>
+
+                            {(searchTerm || filtros.fecha_inicio || filtros.fecha_fin || filtros.concepto || filtros.edificio_id) && (
+                                <button
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setFiltros({ fecha_inicio: '', fecha_fin: '', concepto: '', edificio_id: '' });
+                                        setPage(1);
+                                    }}
+                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition cursor-pointer"
+                                    title="Limpiar filtros"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -245,10 +343,10 @@ export default function Finanzas() {
                                             </td>
                                             <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span>${parseFloat(pago.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                                                    <span>{formatMoney(pago.monto)}</span>
                                                     {parseFloat(pago.recargos) > 0 && (
                                                         <span className="text-xs text-red-500 font-normal mt-0.5">
-                                                            + ${parseFloat(pago.recargos).toLocaleString()} recargos
+                                                            + {formatMoney(pago.recargos)} recargos
                                                         </span>
                                                     )}
                                                 </div>
@@ -271,114 +369,120 @@ export default function Finanzas() {
                         </table>
                     </div>
                 )}
+
+                {/* Controles de Paginación */}
+                {!loading && totalItems > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-dark-bg/10 gap-4">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Mostrando <span className="font-bold text-gray-900 dark:text-white">{(page - 1) * limit + 1}</span> a <span className="font-bold text-gray-900 dark:text-white">{Math.min(page * limit, totalItems)}</span> de <span className="font-bold text-gray-900 dark:text-white">{totalItems}</span> pagos
+                        </p>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => setPage(Math.max(1, page - 1))}
+                                disabled={page === 1}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Anterior
+                            </button>
+                            <button
+                                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                                disabled={page === totalPages || totalPages === 0}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Modal Registrar Pago */}
-            <AnimatePresence>
-                {isModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-                        <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white dark:bg-dark-surface relative z-10 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-                        >
-                            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-dark-bg/50">
-                                <div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                                        <DollarSign className="w-5 h-5 mr-2 text-green-500" /> Registrar Ingreso
-                                    </h3>
-                                    <p className="text-xs text-gray-500 mt-1">Captura el pago de renta de un inquilino activo.</p>
-                                </div>
-                                <button onClick={() => setIsModalOpen(false)} className="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                                    <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                                </button>
-                            </div>
-
-                            <div className="overflow-y-auto p-6 flex-1 custom-scrollbar">
-                                <form id="pago-form" onSubmit={handleCrearPago} className="space-y-5">
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contrato Activo</label>
-                                        <select
-                                            required
-                                            value={nuevoPago.contrato_id}
-                                            onChange={(e) => handleContratoSelect(e.target.value)}
-                                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                                        >
-                                            <option value="">Selecciona quién está pagando...</option>
-                                            {contratosActivos.map(c => (
-                                                <option key={c.id} value={c.id}>
-                                                    {c.inquilino_nombre_completo} - Depa {c.departamento_numero} ({c.edificio_nombre})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Concepto de Ingreso</label>
-                                            <select
-                                                required
-                                                value={nuevoPago.concepto}
-                                                onChange={e => setNuevoPago({ ...nuevoPago, concepto: e.target.value })}
-                                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                                            >
-                                                <option value="Renta Mensual">Renta Mensual</option>
-                                                <option value="Depósito en Garantía">Depósito en Garantía</option>
-                                                <option value="Multa / Intereses">Multa / Intereses</option>
-                                                <option value="Adeudo Anterior">Adeudo Anterior</option>
-                                                <option value="Mantenimiento Adicional">Mantenimiento Adicional</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mes que cubre</label>
-                                            <input
-                                                type="date" required
-                                                value={nuevoPago.fecha_correspondiente}
-                                                onChange={e => setNuevoPago({ ...nuevoPago, fecha_correspondiente: e.target.value })}
-                                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto Pagado ($)</label>
-                                            <input
-                                                type="number" step="0.01" required
-                                                value={nuevoPago.monto} onChange={e => setNuevoPago({ ...nuevoPago, monto: e.target.value })}
-                                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white font-bold transition-all shadow-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recargos/Penalizaciones ($)</label>
-                                            <input
-                                                type="number" step="0.01"
-                                                value={nuevoPago.recargos} onChange={e => setNuevoPago({ ...nuevoPago, recargos: e.target.value })}
-                                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 dark:text-red-400 font-bold transition-all shadow-sm"
-                                            />
-                                        </div>
-                                    </div>
-
-                                </form>
-                            </div>
-
-                            <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-dark-bg/50 flex justify-end gap-3 z-20">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 bg-white dark:bg-dark-surface text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm shadow-sm">
-                                    Cancelar
-                                </button>
-                                <button type="submit" form="pago-form" disabled={isSubmitting} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 transition-all text-sm disabled:opacity-50">
-                                    {isSubmitting ? 'Procesando...' : 'Aplicar Ingreso'}
-                                </button>
-                            </div>
-                        </motion.div>
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="Registrar Ingreso"
+                subtitle="Captura el pago de renta de un inquilino activo."
+                icon={DollarSign}
+                iconColor="text-green-500"
+                size="lg"
+                footer={
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 bg-white dark:bg-dark-surface text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm shadow-sm">
+                            Cancelar
+                        </button>
+                        <button type="submit" form="pago-form" disabled={isSubmitting} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 transition-all text-sm disabled:opacity-50">
+                            {isSubmitting ? 'Procesando...' : 'Aplicar Ingreso'}
+                        </button>
                     </div>
-                )}
-            </AnimatePresence>
+                }
+            >
+                <form id="pago-form" onSubmit={handleCrearPago} className="p-6 space-y-5">
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contrato Activo</label>
+                        <select
+                            required
+                            value={nuevoPago.contrato_id}
+                            onChange={(e) => handleContratoSelect(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
+                        >
+                            <option value="">Selecciona quién está pagando...</option>
+                            {contratosActivos.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.inquilino_nombre_completo} - Depa {c.departamento_numero} ({c.edificio_nombre})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Concepto de Ingreso</label>
+                            <select
+                                required
+                                value={nuevoPago.concepto}
+                                onChange={e => setNuevoPago({ ...nuevoPago, concepto: e.target.value })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
+                            >
+                                <option value="Renta Mensual">Renta Mensual</option>
+                                <option value="Depósito en Garantía">Depósito en Garantía</option>
+                                <option value="Multa / Intereses">Multa / Intereses</option>
+                                <option value="Adeudo Anterior">Adeudo Anterior</option>
+                                <option value="Mantenimiento Adicional">Mantenimiento Adicional</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mes que cubre</label>
+                            <input
+                                type="date" required
+                                value={nuevoPago.fecha_correspondiente}
+                                onChange={e => setNuevoPago({ ...nuevoPago, fecha_correspondiente: e.target.value })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto Pagado ($)</label>
+                            <input
+                                type="number" step="0.01" required
+                                value={nuevoPago.monto} onChange={e => setNuevoPago({ ...nuevoPago, monto: e.target.value })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white font-bold transition-all shadow-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recargos/Penalizaciones ($)</label>
+                            <input
+                                type="number" step="0.01"
+                                value={nuevoPago.recargos} onChange={e => setNuevoPago({ ...nuevoPago, recargos: e.target.value })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 dark:text-red-400 font-bold transition-all shadow-sm"
+                            />
+                        </div>
+                    </div>
+
+                </form>
+            </Modal>
         </div>
     );
 }

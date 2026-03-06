@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { Building2, Users, ReceiptText, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { usePermissions } from '../context/usePermissions';
+import { useAuth } from '../context/AuthContext';
+import EmpresaSelector from '../components/EmpresaSelector';
 import api from '../api';
 
 const dataIngresos = [
@@ -49,6 +51,7 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue }) => (
 
 export default function Dashboard() {
     const { canEditFinances } = usePermissions();
+    const { empresaActiva } = useAuth();
     const [stats, setStats] = useState({
         totalDepas: 0,
         rentados: 0,
@@ -59,11 +62,11 @@ export default function Dashboard() {
         const fetchDashboardData = async () => {
             try {
                 const [edificiosRes, ticketsRes] = await Promise.all([
-                    api.get('/edificios'),
+                    api.get('/edificios?per_page=999'),
                     api.get('/tickets')
                 ]);
 
-                const edificios = edificiosRes.data;
+                const edificios = edificiosRes.data.items || edificiosRes.data;
                 const tickets = ticketsRes.data;
 
                 let total = 0;
@@ -87,17 +90,18 @@ export default function Dashboard() {
         };
 
         fetchDashboardData();
-    }, []);
+    }, [empresaActiva?.id]);
 
     return (
         <div className="space-y-6">
+            <EmpresaSelector />
 
             {/* Cards de Métricas Rápidas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {canEditFinances && <StatCard title="Ingreso Mensual" value="$124,500" icon={ReceiptText} trend="up" trendValue="12.5%" />}
+                {canEditFinances && <StatCard title="Ingreso Mensual" value="$124,500.00" icon={ReceiptText} trend="up" trendValue="12.5%" />}
                 <StatCard title="Depas Ocupados" value={`${stats.rentados} / ${stats.totalDepas}`} icon={Building2} trend="up" trendValue="5%" />
                 <StatCard title="Tickets Abiertos" value={stats.ticketsAbiertos} icon={Activity} trend="down" trendValue="2" />
-                {canEditFinances && <StatCard title="Cobros Vencidos" value="$12,000" icon={Users} trend="up" trendValue="2%" />}
+                {canEditFinances && <StatCard title="Cobros Vencidos" value="$12,000.00" icon={Users} trend="up" trendValue="2%" />}
             </div>
 
             {/* Sección principal (Gráficas + Listas) */}

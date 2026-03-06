@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 import models, schemas
+from routers.auth import get_current_user, get_empresa_id
 
 router = APIRouter(
     prefix="/api/tickets",
@@ -10,9 +11,22 @@ router = APIRouter(
 )
 
 @router.get("", response_model=List[schemas.TicketDetalle])
-def read_tickets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # Join manual para poder construir el esquema detallado fácilmente
-    db_tickets = db.query(models.TicketMantenimiento).offset(skip).limit(limit).all()
+def read_tickets(
+    request: Request,
+    skip: int = 0, limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    empresa_id = get_empresa_id(request, current_user)
+    query = db.query(models.TicketMantenimiento)
+    
+    if empresa_id:
+        # Filtrar tickets por edificios de la empresa
+        query = query.join(models.Departamento).join(models.Edificio).filter(
+            models.Edificio.empresa_id == empresa_id
+        )
+    
+    db_tickets = query.offset(skip).limit(limit).all()
     
     resultados = []
     for t in db_tickets:
@@ -29,7 +43,8 @@ def read_tickets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
     return resultados
 
 @router.get("/{ticket_id}", response_model=schemas.TicketDetalle)
-def read_ticket(ticket_id: int, db: Session = Depends(get_db)):
+def read_ticket(ticket_id: int, db: Session = Depends(get_db),
+                current_user: models.Usuario = Depends(get_current_user)):
     t = db.query(models.TicketMantenimiento).filter(models.TicketMantenimiento.id == ticket_id).first()
     if t is None:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
@@ -46,7 +61,9 @@ def read_ticket(ticket_id: int, db: Session = Depends(get_db)):
     }
 
 @router.post("", response_model=schemas.TicketMantenimiento)
-def create_ticket(ticket: schemas.TicketMantenimientoCreate, db: Session = Depends(get_db)):
+def create_ticket(ticket: schemas.TicketMantenimientoCreate,
+                  db: Session = Depends(get_db),
+                  current_user: models.Usuario = Depends(get_current_user)):
     departamento = db.query(models.Departamento).filter(models.Departamento.id == ticket.departamento_id).first()
     if not departamento:
         raise HTTPException(status_code=404, detail="Departamento no encontrado")
@@ -58,12 +75,13 @@ def create_ticket(ticket: schemas.TicketMantenimientoCreate, db: Session = Depen
     return db_ticket
 
 @router.put("/{ticket_id}", response_model=schemas.TicketMantenimiento)
-def update_ticket(ticket_id: int, ticket_update: schemas.TicketMantenimientoBase, db: Session = Depends(get_db)):
+def update_ticket(ticket_id: int, ticket_update: schemas.TicketMantenimientoBase,
+                  db: Session = Depends(get_db),
+                  current_user: models.Usuario = Depends(get_current_user)):
     db_ticket = db.query(models.TicketMantenimiento).filter(models.TicketMantenimiento.id == ticket_id).first()
     if not db_ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
         
-    # Actualizar solo los campos proporcionados y que estén en Update
     for var, value in ticket_update.model_dump(exclude_unset=True).items():
         setattr(db_ticket, var, value)
         

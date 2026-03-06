@@ -51,10 +51,10 @@ def generar_recibo_pdf(pago_data):
     # Empresa
     c.setFont("Helvetica-Bold", 16)
     c.setFillColor(TEXT_MAIN)
-    c.drawString(inch + 65, y - 20, "GRUPO FAMESTO")
+    c.drawString(inch + 65, y - 20, pago_data.get('empresa_nombre', 'Empresa'))
     c.setFont("Helvetica", 10)
     c.setFillColor(TEXT_MUTED)
-    c.drawString(inch + 65, y - 35, "Arrendador: Marisol Sánchez")
+    c.drawString(inch + 65, y - 35, "Arrendador")
     c.drawString(inch + 65, y - 48, "Gestión Profesional de Propiedades")
 
     # Folio y Título "RECIBO DE PAGO"
@@ -165,10 +165,10 @@ def generar_recibo_pdf(pago_data):
     c.line(inch + 20, y, width/2 - 20, y)
     c.setFont("Helvetica-Bold", 11)
     c.setFillColor(TEXT_MAIN)
-    c.drawCentredString(width/4 + inch/2, y - 18, "Marisol Sánchez")
+    c.drawCentredString(width/4 + inch/2, y - 18, pago_data.get('empresa_nombre', 'Empresa'))
     c.setFont("Helvetica", 9)
     c.setFillColor(TEXT_MUTED)
-    c.drawCentredString(width/4 + inch/2, y - 32, "Arrendador - Grupo Famesto")
+    c.drawCentredString(width/4 + inch/2, y - 32, "Arrendador")
 
     # Firma Inquilino (Derecha)
     c.setStrokeColor(TEXT_MAIN)

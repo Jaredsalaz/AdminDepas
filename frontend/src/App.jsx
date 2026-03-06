@@ -6,11 +6,13 @@ import Mantenimiento from './pages/Mantenimiento';
 import Propiedades from './pages/Propiedades';
 import Inquilinos from './pages/Inquilinos';
 import Finanzas from './pages/Finanzas';
+import Cobranza from './pages/Cobranza';
 import Configuracion from './pages/Configuracion';
 import Login from './pages/Login';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { usePermissions } from './context/usePermissions';
+import { ToastProvider } from './components/Toast';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -41,6 +43,7 @@ function AppContent() {
         {/* Vistas Simultaneadas Temporales para la Navegación, o reales añadidas */}
         <Route path="propiedades" element={<Propiedades />} />
         <Route path="inquilinos" element={<Inquilinos />} />
+        <Route path="cobranza" element={<Cobranza />} />
         <Route path="finanzas" element={
           <RoleProtectedRoute requiredPermission="canEditFinances">
             <Finanzas />
@@ -61,7 +64,9 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

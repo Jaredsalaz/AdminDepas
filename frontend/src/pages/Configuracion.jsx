@@ -3,10 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, Bell, Shield, Wallet, Save, Upload, Users, Plus, X, Key } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/usePermissions';
+import EmpresaSelector from '../components/EmpresaSelector';
 import api from '../api';
+import Modal from '../components/Modal';
+import { useToast } from '../components/Toast';
 
 export default function Configuracion() {
-    const { user } = useAuth();
+    const { empresaActiva, user } = useAuth();
+    const toast = useToast();
     const { isAdmin, canEditFinances } = usePermissions();
 
     const [activeTab, setActiveTab] = useState('perfil');
@@ -18,6 +22,21 @@ export default function Configuracion() {
 
     const [editingPasswordUser, setEditingPasswordUser] = useState(null);
     const [newPasswordValue, setNewPasswordValue] = useState('');
+
+    // Notificaciones State
+    const [notificacionesPreferencias, setNotificacionesPreferencias] = useState(() => {
+        const saved = localStorage.getItem('notificacionesPreferencias');
+        return saved ? JSON.parse(saved) : {
+            emailRecibos: true,
+            emailMorosos: true,
+            alertasSistema: true,
+            resumenSemanal: true
+        };
+    });
+
+    useEffect(() => {
+        localStorage.setItem('notificacionesPreferencias', JSON.stringify(notificacionesPreferencias));
+    }, [notificacionesPreferencias]);
 
     useEffect(() => {
         if (activeTab === 'usuarios') {
@@ -41,9 +60,9 @@ export default function Configuracion() {
             await api.post('/auth/register', newUserForm);
             setNewUserForm({ nombre: '', email: '', password: '', rol: 'Administrador' });
             fetchUsuarios();
-            alert("Usuario creado exitosamente");
+            toast.success("Usuario creado exitosamente");
         } catch (error) {
-            alert(error.response?.data?.detail || "Error al crear usuario");
+            toast.error(error.response?.data?.detail || "Error al crear usuario");
         } finally {
             setIsSubmitting(false);
         }
@@ -57,11 +76,11 @@ export default function Configuracion() {
             await api.put(`/auth/usuarios/${editingPasswordUser.id}/password`, {
                 new_password: newPasswordValue
             });
-            alert('Contraseña actualizada correctamente');
+            toast.success('Contraseña actualizada correctamente');
             setEditingPasswordUser(null);
             setNewPasswordValue('');
         } catch (error) {
-            alert(error.response?.data?.detail || "Error al actualizar contraseña");
+            toast.error(error.response?.data?.detail || "Error al actualizar contraseña");
         } finally {
             setIsSubmitting(false);
         }
@@ -69,6 +88,7 @@ export default function Configuracion() {
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
+            <EmpresaSelector />
             <div>
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración</h2>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Administra tu cuenta, notificaciones y preferencias del sistema.</p>
@@ -207,6 +227,68 @@ export default function Configuracion() {
                                 <button className="mt-4 px-6 py-2.5 bg-gray-800 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-200 dark:text-gray-900 text-white font-medium rounded-xl transition-colors text-sm">
                                     Actualizar Contraseña
                                 </button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* TAB NOTIFICACIONES */}
+                    {activeTab === 'notificaciones' && (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Preferencias de Notificaciones</h3>
+                            <div className="space-y-4 max-w-2xl">
+
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-bg border border-gray-100 dark:border-gray-800 rounded-2xl">
+                                    <div>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200">Recibos Emitidos</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Recibir un correo cada vez que se genera un recibo de pago válido.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setNotificacionesPreferencias(prev => ({ ...prev, emailRecibos: !prev.emailRecibos }))}
+                                        className={`w-12 h-6 rounded-full relative transition-colors focus:outline-none ${notificacionesPreferencias.emailRecibos ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${notificacionesPreferencias.emailRecibos ? 'transform translate-x-6' : ''}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-bg border border-gray-100 dark:border-gray-800 rounded-2xl">
+                                    <div>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200">Alertas de Morosidad</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Notificar a los administradores cuando un contrato pase a estado moroso.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setNotificacionesPreferencias(prev => ({ ...prev, emailMorosos: !prev.emailMorosos }))}
+                                        className={`w-12 h-6 rounded-full relative transition-colors focus:outline-none ${notificacionesPreferencias.emailMorosos ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${notificacionesPreferencias.emailMorosos ? 'transform translate-x-6' : ''}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-bg border border-gray-100 dark:border-gray-800 rounded-2xl">
+                                    <div>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200">Resumen Semanal</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Recibir un resumen semanal de los pagos cobrados y estados de cuenta.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setNotificacionesPreferencias(prev => ({ ...prev, resumenSemanal: !prev.resumenSemanal }))}
+                                        className={`w-12 h-6 rounded-full relative transition-colors focus:outline-none ${notificacionesPreferencias.resumenSemanal ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${notificacionesPreferencias.resumenSemanal ? 'transform translate-x-6' : ''}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-bg border border-gray-100 dark:border-gray-800 rounded-2xl">
+                                    <div>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200">Alertas Generales del Sistema</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Avisos importantes sobre mantenimiento o actualizaciones en la plataforma.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setNotificacionesPreferencias(prev => ({ ...prev, alertasSistema: !prev.alertasSistema }))}
+                                        className={`w-12 h-6 rounded-full relative transition-colors focus:outline-none ${notificacionesPreferencias.alertasSistema ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${notificacionesPreferencias.alertasSistema ? 'transform translate-x-6' : ''}`} />
+                                    </button>
+                                </div>
+
                             </div>
                         </motion.div>
                     )}

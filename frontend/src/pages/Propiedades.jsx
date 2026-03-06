@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Plus, MapPin, Grid, DoorOpen, MoreVertical, Search, X, CheckCircle, Clock } from 'lucide-react';
+import { Building2, Plus, MapPin, Grid, DoorOpen, MoreVertical, Search, X, CheckCircle, Clock, ChevronLeft, ChevronRight, Pencil, Save } from 'lucide-react';
 import { usePermissions } from '../context/usePermissions';
+import { useAuth } from '../context/AuthContext';
+import EmpresaSelector from '../components/EmpresaSelector';
 import api from '../api';
+import { formatMoney } from '../utils/formatMoney';
+import Modal from '../components/Modal';
+import { useToast } from '../components/Toast';
 
 export default function Propiedades() {
     const { canDeleteData, canCreateData } = usePermissions();
+    const { empresaActiva } = useAuth();
+    const toast = useToast();
 
     const [edificios, setEdificios] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -16,11 +23,21 @@ export default function Propiedades() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [nuevoDepto, setNuevoDepto] = useState({ numero: '', renta_mensual: '', inventario: '' });
     const [isSubmittingDepto, setIsSubmittingDepto] = useState(false);
+    const [editingDepto, setEditingDepto] = useState(null); // Depa en edición
 
-    const fetchEdificios = async () => {
+    // Paginación
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalEdificios, setTotalEdificios] = useState(0);
+
+    const fetchEdificios = async (page = 1) => {
         try {
-            const { data } = await api.get('/edificios');
-            setEdificios(data);
+            setLoading(true);
+            const { data } = await api.get(`/edificios?page=${page}&per_page=9`);
+            setEdificios(data.items);
+            setCurrentPage(data.page);
+            setTotalPages(data.pages);
+            setTotalEdificios(data.total);
         } catch (error) {
             console.error("Error fetching edificios:", error);
         } finally {
@@ -29,8 +46,9 @@ export default function Propiedades() {
     };
 
     useEffect(() => {
-        fetchEdificios();
-    }, []);
+        fetchEdificios(1);
+        setCurrentPage(1);
+    }, [empresaActiva?.id]);
 
     const handleCreateEdificio = async (e) => {
         e.preventDefault();
@@ -39,9 +57,10 @@ export default function Propiedades() {
         setIsSubmitting(true);
         try {
             await api.post('/edificios', nuevoEdificio);
-            await fetchEdificios(); // Recargar lista
+            await fetchEdificios(currentPage); // Recargar lista
             setIsCreateModalOpen(false);
             setNuevoEdificio({ nombre: '', direccion: '' });
+            toast.success("Edificio registrado exitosamente");
         } catch (error) {
             console.error("Error guardando edificio:", error);
         } finally {
@@ -61,12 +80,13 @@ export default function Propiedades() {
                 inventario: nuevoDepto.inventario || null
             });
             // Recargar datos: Volver a fetchear edificios y actualizar el selectedEdificio
-            const { data } = await api.get('/edificios');
-            setEdificios(data);
-            const edificioActualizado = data.find(ed => ed.id === selectedEdificio.id);
+            const { data } = await api.get(`/edificios?page=${currentPage}&per_page=9`);
+            setEdificios(data.items);
+            const edificioActualizado = data.items.find(ed => ed.id === selectedEdificio.id);
             if (edificioActualizado) setSelectedEdificio(edificioActualizado);
 
             setNuevoDepto({ numero: '', renta_mensual: '', inventario: '' });
+            toast.success("Departamento agregado exitosamente");
         } catch (error) {
             console.error("Error guardando departamento:", error);
         } finally {
@@ -81,12 +101,38 @@ export default function Propiedades() {
             await api.delete(`/edificios/departamentos/${deptoId}`);
 
             // Recargar
-            const { data } = await api.get('/edificios');
-            setEdificios(data);
-            const edificioActualizado = data.find(ed => ed.id === selectedEdificio.id);
+            const { data } = await api.get(`/edificios?page=${currentPage}&per_page=9`);
+            setEdificios(data.items);
+            const edificioActualizado = data.items.find(ed => ed.id === selectedEdificio.id);
             if (edificioActualizado) setSelectedEdificio(edificioActualizado);
+            toast.success("Departamento eliminado");
         } catch (error) {
             console.error("Error eliminando departamento:", error);
+        }
+    };
+
+    const handleUpdateDepto = async (e) => {
+        e.preventDefault();
+        if (!editingDepto) return;
+        setIsSubmittingDepto(true);
+        try {
+            await api.put(`/edificios/departamentos/${editingDepto.id}`, {
+                numero: editingDepto.numero,
+                renta_mensual: parseFloat(editingDepto.renta_mensual),
+                inventario: editingDepto.inventario || null,
+                estado: editingDepto.estado
+            });
+            // Recargar
+            const { data } = await api.get(`/edificios?page=${currentPage}&per_page=9`);
+            setEdificios(data.items);
+            const edificioActualizado = data.items.find(ed => ed.id === selectedEdificio.id);
+            if (edificioActualizado) setSelectedEdificio(edificioActualizado);
+            setEditingDepto(null);
+            toast.success("Departamento actualizado exitosamente");
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Error al actualizar departamento");
+        } finally {
+            setIsSubmittingDepto(false);
         }
     };
 
@@ -97,6 +143,7 @@ export default function Propiedades() {
 
     return (
         <div className="space-y-6">
+            <EmpresaSelector />
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -129,7 +176,7 @@ export default function Propiedades() {
                     />
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                    Total: <span className="text-primary-500 font-bold">{filteredEdificios.length}</span> Edificios
+                    Total: <span className="text-primary-500 font-bold">{totalEdificios}</span> Edificios
                 </div>
             </div>
 
@@ -198,7 +245,7 @@ export default function Propiedades() {
                                             <div>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">Ingreso Potencial</p>
                                                 <p className="text-sm font-bold text-green-600 dark:text-green-400">
-                                                    ${ingresosPotenciales.toLocaleString()} <span className="text-xs font-normal text-gray-400">/mes</span>
+                                                    {formatMoney(ingresosPotenciales)} <span className="text-xs font-normal text-gray-400">/mes</span>
                                                 </p>
                                             </div>
                                             <button
@@ -213,6 +260,31 @@ export default function Propiedades() {
                             );
                         })}
                     </AnimatePresence>
+                </div>
+            )}
+
+            {/* Paginación */}
+            {!loading && totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 pt-2 pb-4">
+                    <button
+                        onClick={() => fetchEdificios(currentPage - 1)}
+                        disabled={currentPage <= 1}
+                        className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary-400 hover:text-primary-500 shadow-sm"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                        Anterior
+                    </button>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Página <span className="font-bold text-primary-500">{currentPage}</span> de <span className="font-bold">{totalPages}</span>
+                    </span>
+                    <button
+                        onClick={() => fetchEdificios(currentPage + 1)}
+                        disabled={currentPage >= totalPages}
+                        className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary-400 hover:text-primary-500 shadow-sm"
+                    >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
                 </div>
             )}
 
@@ -309,127 +381,138 @@ export default function Propiedades() {
                                     <motion.div
                                         key={depa.id}
                                         whileHover={{ scale: 1.01 }}
-                                        className="p-4 rounded-xl border border-gray-100 dark:border-gray-700/50 bg-white dark:bg-dark-surface shadow-sm hover:shadow-md transition-all flex justify-between items-center group"
+                                        className="p-4 rounded-xl border border-gray-100 dark:border-gray-700/50 bg-white dark:bg-dark-surface shadow-sm hover:shadow-md transition-all"
                                     >
-                                        <div className="flex items-start space-x-4 flex-1">
-                                            <div className={`w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center font-bold text-lg
-                                                ${depa.estado === 'Disponible' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                                                    depa.estado === 'Mantenimiento' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                                        'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                                                {depa.numero}
-                                            </div>
-                                            <div className="pr-4">
-                                                <p className="font-semibold text-gray-800 dark:text-white">Depa {depa.numero}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                                                    {depa.inventario || "Sin inventario"}
-                                                </p>
-                                            </div>
-                                        </div>
+                                        {editingDepto && editingDepto.id === depa.id ? (
+                                            /* Modo Edición */
+                                            <form onSubmit={handleUpdateDepto} className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-xs text-gray-500 dark:text-gray-400">Número</label>
+                                                        <input type="text" required value={editingDepto.numero}
+                                                            onChange={e => setEditingDepto({ ...editingDepto, numero: e.target.value })}
+                                                            className="w-full px-3 py-1.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-gray-500 dark:text-gray-400">Renta Mensual</label>
+                                                        <input type="number" step="0.01" required value={editingDepto.renta_mensual}
+                                                            onChange={e => setEditingDepto({ ...editingDepto, renta_mensual: e.target.value })}
+                                                            className="w-full px-3 py-1.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400">Inventario</label>
+                                                    <input type="text" value={editingDepto.inventario || ''}
+                                                        onChange={e => setEditingDepto({ ...editingDepto, inventario: e.target.value })}
+                                                        className="w-full px-3 py-1.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400">Estado</label>
+                                                    <select value={editingDepto.estado}
+                                                        onChange={e => setEditingDepto({ ...editingDepto, estado: e.target.value })}
+                                                        className="w-full px-3 py-1.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
+                                                        <option value="Disponible">Disponible</option>
+                                                        <option value="Rentado">Rentado</option>
+                                                        <option value="Mantenimiento">Mantenimiento</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex gap-2 justify-end">
+                                                    <button type="button" onClick={() => setEditingDepto(null)}
+                                                        className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition">
+                                                        Cancelar
+                                                    </button>
+                                                    <button type="submit" disabled={isSubmittingDepto}
+                                                        className="flex items-center gap-1 bg-primary-500 hover:bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-50">
+                                                        <Save className="w-3 h-3" />
+                                                        {isSubmittingDepto ? 'Guardando...' : 'Guardar'}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        ) : (
+                                            /* Modo Vista */
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-start space-x-4 flex-1">
+                                                    <div className={`w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center font-bold text-lg
+                                                        ${depa.estado === 'Disponible' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                                                            depa.estado === 'Mantenimiento' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                                'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                                        {depa.numero}
+                                                    </div>
+                                                    <div className="pr-4">
+                                                        <p className="font-semibold text-gray-800 dark:text-white">Depa {depa.numero}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                                                            {depa.inventario || "Sin inventario"}
+                                                        </p>
+                                                    </div>
+                                                </div>
 
-                                        <div className="text-right flex-shrink-0 flex flex-col justify-between items-end">
-                                            {canDeleteData && (
-                                                <button
-                                                    onClick={() => handleDeleteDepto(depa.id)}
-                                                    className="text-gray-300 hover:text-red-500 transition-colors p-1"
-                                                    title="Eliminar Departamento"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <div className="mt-2">
-                                                <p className="font-bold text-gray-900 dark:text-white">${parseFloat(depa.renta_mensual).toLocaleString()}</p>
-                                                <div className="flex items-center justify-end mt-1">
-                                                    {depa.estado === 'Disponible' ? <CheckCircle className="w-3 h-3 text-green-500 mr-1" /> : <Clock className="w-3 h-3 text-gray-400 mr-1" />}
-                                                    <span className={`text-xs font-medium 
-                                                        ${depa.estado === 'Disponible' ? 'text-green-500' :
-                                                            depa.estado === 'Mantenimiento' ? 'text-yellow-500' : 'text-gray-500'}`}>
-                                                        {depa.estado}
-                                                    </span>
+                                                <div className="text-right flex-shrink-0 flex flex-col justify-between items-end">
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => setEditingDepto({ ...depa, renta_mensual: parseFloat(depa.renta_mensual) })}
+                                                            className="text-gray-300 hover:text-primary-500 transition-colors p-1"
+                                                            title="Editar Departamento"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                        {canDeleteData && (
+                                                            <button
+                                                                onClick={() => handleDeleteDepto(depa.id)}
+                                                                className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                                                title="Eliminar Departamento"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <p className="font-bold text-gray-900 dark:text-white">{formatMoney(depa.renta_mensual)}</p>
+                                                        <div className="flex items-center justify-end mt-1">
+                                                            {depa.estado === 'Disponible' ? <CheckCircle className="w-3 h-3 text-green-500 mr-1" /> : <Clock className="w-3 h-3 text-gray-400 mr-1" />}
+                                                            <span className={`text-xs font-medium 
+                                                                ${depa.estado === 'Disponible' ? 'text-green-500' :
+                                                                    depa.estado === 'Mantenimiento' ? 'text-yellow-500' : 'text-gray-500'}`}>
+                                                                {depa.estado}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </motion.div>
                                 ))}
                             </div>
                         </motion.div>
                     </>
                 )}
-
-                {/* Modal para Crear Nuevo Edificio (Centro) */}
-                {isCreateModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsCreateModalOpen(false)}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white dark:bg-dark-surface relative z-10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800"
-                        >
-                            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                                    <Building2 className="w-5 h-5 mr-2 text-primary-500" />
-                                    Nuevo Edificio
-                                </h3>
-                                <button
-                                    onClick={() => setIsCreateModalOpen(false)}
-                                    className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-                                >
-                                    <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleCreateEdificio} className="p-6 space-y-5">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Edificio</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={nuevoEdificio.nombre}
-                                        onChange={(e) => setNuevoEdificio({ ...nuevoEdificio, nombre: e.target.value })}
-                                        placeholder="Ej. Torre Esmeralda"
-                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dirección Completa</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={nuevoEdificio.direccion}
-                                        onChange={(e) => setNuevoEdificio({ ...nuevoEdificio, direccion: e.target.value })}
-                                        placeholder="Ej. Av. Paseo de los Leones 123"
-                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
-                                    />
-                                </div>
-
-                                <div className="pt-4 flex justify-end space-x-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsCreateModalOpen(false)}
-                                        className="btn-secondary"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className="btn-primary opacity-100 data-[disabled=true]:opacity-50"
-                                        data-disabled={isSubmitting}
-                                    >
-                                        {isSubmitting ? 'Guardando...' : 'Guardar Edificio'}
-                                    </button>
-                                </div>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
             </AnimatePresence>
+
+            {/* Modal para Crear Nuevo Edificio */}
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                title="Nuevo Edificio"
+                icon={Building2}
+                footer={
+                    <div className="flex justify-end space-x-3">
+                        <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn-secondary">Cancelar</button>
+                        <button type="submit" form="edificio-form" disabled={isSubmitting} className="btn-primary opacity-100 data-[disabled=true]:opacity-50" data-disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : 'Guardar Edificio'}
+                        </button>
+                    </div>
+                }
+            >
+                <form id="edificio-form" onSubmit={handleCreateEdificio} className="p-6 space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Edificio</label>
+                        <input type="text" required value={nuevoEdificio.nombre} onChange={(e) => setNuevoEdificio({ ...nuevoEdificio, nombre: e.target.value })} placeholder="Ej. Torre Esmeralda" className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dirección Completa</label>
+                        <input type="text" required value={nuevoEdificio.direccion} onChange={(e) => setNuevoEdificio({ ...nuevoEdificio, direccion: e.target.value })} placeholder="Ej. Av. Paseo de los Leones 123" className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm" />
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 }

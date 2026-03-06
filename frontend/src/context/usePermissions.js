@@ -3,16 +3,18 @@ import { useAuth } from './AuthContext';
 export function usePermissions() {
     const { user } = useAuth();
 
-    const isAdmin = user?.rol === 'Administrador';
+    const isSuperAdmin = user?.rol === 'SuperAdmin';
+    const isAdmin = user?.rol === 'Administrador' || isSuperAdmin; // SuperAdmin tiene permisos de Admin
     const isAssistant = user?.rol === 'Asistente';
 
     return {
+        isSuperAdmin,
         isAdmin,
         isAssistant,
         canEditFinances: isAdmin,
         canManageUsers: isAdmin,
-        canDeleteData: isAdmin, // Sólo admin borra inquilinos/propiedades
-        canCreateData: true,    // Asistente puede dar de alta (inquilinos, tickets, propiedades)
-        canEditData: true       // Asistente puede modificar todo excepto roles y finanzas
+        canDeleteData: isAdmin,
+        canCreateData: true,
+        canEditData: true
     };
 }

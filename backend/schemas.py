@@ -3,6 +3,29 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 
+# --- EMPRESAS ---
+class EmpresaBase(BaseModel):
+    nombre: str
+    rfc: Optional[str] = None
+    direccion: Optional[str] = None
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+    logo_url: Optional[str] = None
+
+class EmpresaCreate(EmpresaBase):
+    # Opcionalmente crear con un admin inicial
+    admin_nombre: Optional[str] = None
+    admin_email: Optional[str] = None
+    admin_password: Optional[str] = None
+
+class Empresa(EmpresaBase):
+    id: int
+    activa: bool = True
+    fecha_creacion: datetime
+
+    class Config:
+        from_attributes = True
+
 # --- DEPARTAMENTOS ---
 class DepartamentoBase(BaseModel):
     numero: str
@@ -33,6 +56,7 @@ class InquilinoCreate(InquilinoBase):
 
 class Inquilino(InquilinoBase):
     id: int
+    empresa_id: int
     tiene_contrato_activo: bool = False
     
     class Config:
@@ -48,6 +72,7 @@ class EdificioCreate(EdificioBase):
 
 class Edificio(EdificioBase):
     id: int
+    empresa_id: int
     departamentos: List[Departamento] = []
 
     class Config:
@@ -80,8 +105,8 @@ class ContratoDetalle(Contrato):
 # --- PAGOS ---
 class PagoBase(BaseModel):
     contrato_id: int
-    fecha_correspondiente: datetime  # Qué mes está pagando
-    concepto: str = "Renta Mensual" # Renta Mensual, Depósito en Garantía
+    fecha_correspondiente: datetime
+    concepto: str = "Renta Mensual"
     monto: Decimal
     recargos: Optional[Decimal] = Decimal('0.00')
     estado: str = "Completado"
@@ -96,6 +121,12 @@ class Pago(PagoBase):
 
     class Config:
         from_attributes = True
+
+class PaginatedPagos(BaseModel):
+    items: List[Pago]
+    total: int
+    skip: int
+    limit: int
 
 # --- TICKETS MANTENIMIENTO ---
 class TicketMantenimientoBase(BaseModel):
@@ -114,7 +145,6 @@ class TicketMantenimiento(TicketMantenimientoBase):
     class Config:
         from_attributes = True
 
-# Esquema para devolver un Ticket con información de su departamento y edificio
 class TicketDetalle(TicketMantenimiento):
     departamento_numero: str
     edificio_nombre: str
@@ -128,9 +158,12 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     password: str
+    empresa_id: Optional[int] = None
 
 class UsuarioOut(UsuarioBase):
     id: int
+    empresa_id: Optional[int] = None
+    empresa_nombre: Optional[str] = None
     fecha_creacion: datetime
 
     class Config:

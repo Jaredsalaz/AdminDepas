@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Clock, Wrench, CheckCircle2, MoreVertical, Search, DollarSign, X, AlertCircle } from 'lucide-react';
 import { usePermissions } from '../context/usePermissions';
+import { useAuth } from '../context/AuthContext';
+import EmpresaSelector from '../components/EmpresaSelector';
 import api from '../api';
+import { formatMoney } from '../utils/formatMoney';
+import Modal from '../components/Modal';
+import { useToast } from '../components/Toast';
 
 const statusConfig = {
     'Pendiente': { icon: Clock, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' },
@@ -12,6 +17,8 @@ const statusConfig = {
 
 export default function Mantenimiento() {
     const { canEditFinances } = usePermissions();
+    const { empresaActiva } = useAuth();
+    const toast = useToast();
 
     const [tickets, setTickets] = useState([]);
     const [departamentos, setDepartamentos] = useState([]);
@@ -30,7 +37,7 @@ export default function Mantenimiento() {
         try {
             const [ticketsRes, edifRes] = await Promise.all([
                 api.get('/tickets'),
-                api.get('/edificios')
+                api.get('/edificios?per_page=999')
             ]);
 
             // Normalizar el estado por si hay datos viejos en BD sin tilde
@@ -43,8 +50,9 @@ export default function Mantenimiento() {
 
             // Extraer y aplanar todos los departamentos de los edificios
             const allDeptos = [];
-            if (edifRes.data && edifRes.data.length > 0) {
-                edifRes.data.forEach(edif => {
+            const edificiosData = edifRes.data.items || edifRes.data;
+            if (edificiosData && edificiosData.length > 0) {
+                edificiosData.forEach(edif => {
                     if (edif.departamentos) {
                         edif.departamentos.forEach(dep => {
                             allDeptos.push({
@@ -64,7 +72,7 @@ export default function Mantenimiento() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [empresaActiva?.id]);
 
     const handleCreateTicket = async (e) => {
         e.preventDefault();
@@ -79,8 +87,9 @@ export default function Mantenimiento() {
             await fetchData();
             setIsCreateModalOpen(false);
             setNewTicket({ departamento_id: '', descripcion: '', costo_reparacion: 0 });
+            toast.success("Ticket de mantenimiento creado exitosamente");
         } catch (error) {
-            alert("Error al crear el ticket");
+            toast.error("Error al crear el ticket");
         } finally {
             setIsSubmitting(false);
         }
@@ -98,8 +107,9 @@ export default function Mantenimiento() {
             await fetchData();
             setIsEditModalOpen(false);
             setEditingTicket(null);
+            toast.success("Ticket actualizado exitosamente");
         } catch (error) {
-            alert("Error al actualizar el ticket");
+            toast.error("Error al actualizar el ticket");
         } finally {
             setIsSubmitting(false);
         }
@@ -137,8 +147,10 @@ export default function Mantenimiento() {
                         estado: newStatus,
                         costo_reparacion: parseFloat(ticket.costo_reparacion) || 0
                     });
+                    toast.success(`Ticket movido a ${newStatus}`);
                 } catch (error) {
                     console.error("Error moviendo ticket");
+                    toast.error("Error al actualizar estado del ticket");
                     fetchData(); // revertir si falla
                 }
             }
@@ -154,6 +166,7 @@ export default function Mantenimiento() {
 
     return (
         <div className="space-y-6 flex flex-col h-[calc(100vh-8rem)]">
+            <EmpresaSelector />
             {/* Header del Módulo */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
                 <div>
@@ -241,7 +254,7 @@ export default function Mantenimiento() {
                                                 {parseFloat(ticket.costo_reparacion) > 0 && canEditFinances && (
                                                     <span className="flex items-center text-xs font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-md">
                                                         <DollarSign className="w-3 h-3 mr-0.5" />
-                                                        {parseFloat(ticket.costo_reparacion).toFixed(2)}
+                                                        {formatMoney(ticket.costo_reparacion)}
                                                     </span>
                                                 )}
                                             </div>
@@ -260,89 +273,83 @@ export default function Mantenimiento() {
             </div>
 
             {/* MODAL CREAR TICKET */}
-            <AnimatePresence>
-                {isCreateModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsCreateModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white dark:bg-dark-surface relative z-10 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                                <h3 className="font-bold text-lg dark:text-white">Reportar Nueva Falla</h3>
-                                <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white"><X className="w-5 h-5" /></button>
-                            </div>
-                            <form onSubmit={handleCreateTicket} className="p-5 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidad Afectada</label>
-                                    <select required value={newTicket.departamento_id} onChange={e => setNewTicket({ ...newTicket, departamento_id: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500">
-                                        <option value="">Selecciona un departamento...</option>
-                                        {departamentos.map(d => (
-                                            <option key={d.id} value={d.id}>Depa {d.numero} - {d.edificio_nombre}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Problema</label>
-                                    <textarea required rows={4} placeholder="Ej. Fuga de agua en lavabo del baño principal..." value={newTicket.descripcion} onChange={e => setNewTicket({ ...newTicket, descripcion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
-                                </div>
-                                {canEditFinances && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Costo Estimado de Reparación ($)</label>
-                                        <input type="number" step="0.01" value={newTicket.costo_reparacion} onChange={e => setNewTicket({ ...newTicket, costo_reparacion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-red-500 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500" />
-                                        <p className="text-xs text-gray-500 mt-1">* Si aún no sabes el costo, déjalo en 0. Puedes actualizarlo después.</p>
-                                    </div>
-                                )}
-                                <div className="pt-4 flex justify-end gap-3">
-                                    <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition">Cancelar</button>
-                                    <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-primary-500/30 transition">{isSubmitting ? 'Guardando...' : 'Crear Ticket'}</button>
-                                </div>
-                            </form>
-                        </motion.div>
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                title="Reportar Nueva Falla"
+                icon={AlertCircle}
+                iconColor="text-red-500"
+                footer={
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition">Cancelar</button>
+                        <button type="submit" form="ticket-form" disabled={isSubmitting} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-primary-500/30 transition">{isSubmitting ? 'Guardando...' : 'Crear Ticket'}</button>
                     </div>
-                )}
-            </AnimatePresence>
+                }
+            >
+                <form id="ticket-form" onSubmit={handleCreateTicket} className="p-5 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidad Afectada</label>
+                        <select required value={newTicket.departamento_id} onChange={e => setNewTicket({ ...newTicket, departamento_id: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="">Selecciona un departamento...</option>
+                            {departamentos.map(d => (
+                                <option key={d.id} value={d.id}>Depa {d.numero} - {d.edificio_nombre}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Problema</label>
+                        <textarea required rows={4} placeholder="Ej. Fuga de agua en lavabo del baño principal..." value={newTicket.descripcion} onChange={e => setNewTicket({ ...newTicket, descripcion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
+                    </div>
+                    {canEditFinances && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Costo Estimado de Reparación ($)</label>
+                            <input type="number" step="0.01" value={newTicket.costo_reparacion} onChange={e => setNewTicket({ ...newTicket, costo_reparacion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-red-500 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500" />
+                            <p className="text-xs text-gray-500 mt-1">* Si aún no sabes el costo, déjalo en 0. Puedes actualizarlo después.</p>
+                        </div>
+                    )}
+                </form>
+            </Modal>
 
-            {/* MODAL EDITAR TICKET (Costos y Estado) */}
-            <AnimatePresence>
-                {isEditModalOpen && editingTicket && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsEditModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white dark:bg-dark-surface relative z-10 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-dark-bg/50">
-                                <div>
-                                    <h3 className="font-bold text-lg dark:text-white">Detalle del Ticket</h3>
-                                    <p className="text-xs text-gray-500">TK-{editingTicket.id.toString().padStart(4, '0')} • Depa {editingTicket.departamento_numero}</p>
-                                </div>
-                                <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white"><X className="w-5 h-5" /></button>
-                            </div>
-                            <form onSubmit={handleUpdateTicket} className="p-5 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
-                                    <textarea required rows={3} value={editingTicket.descripcion} onChange={e => setEditingTicket({ ...editingTicket, descripcion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                                        <select value={editingTicket.estado} onChange={e => setEditingTicket({ ...editingTicket, estado: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500">
-                                            <option value="Pendiente">Pendiente</option>
-                                            <option value="En Reparación">En Reparación</option>
-                                            <option value="Resuelto">Resuelto</option>
-                                        </select>
-                                    </div>
-                                    {canEditFinances && (
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Costo de Reparación ($)</label>
-                                            <input type="number" step="0.01" value={editingTicket.costo_reparacion} onChange={e => setEditingTicket({ ...editingTicket, costo_reparacion: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-red-500 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="pt-4 flex justify-end gap-3">
-                                    <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition">Cancelar</button>
-                                    <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-primary-500/30 transition">{isSubmitting ? 'Guardando...' : 'Guardar Cambios'}</button>
-                                </div>
-                            </form>
-                        </motion.div>
+            {/* MODAL EDITAR TICKET */}
+            <Modal
+                isOpen={isEditModalOpen && !!editingTicket}
+                onClose={() => setIsEditModalOpen(false)}
+                title="Detalle del Ticket"
+                subtitle={editingTicket ? `TK-${editingTicket.id.toString().padStart(4, '0')} • Depa ${editingTicket.departamento_numero}` : ''}
+                icon={Wrench}
+                iconColor="text-yellow-500"
+                footer={
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition">Cancelar</button>
+                        <button type="submit" form="edit-ticket-form" disabled={isSubmitting} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-primary-500/30 transition">{isSubmitting ? 'Guardando...' : 'Guardar Cambios'}</button>
                     </div>
+                }
+            >
+                {editingTicket && (
+                    <form id="edit-ticket-form" onSubmit={handleUpdateTicket} className="p-5 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
+                            <textarea required rows={3} value={editingTicket.descripcion} onChange={e => setEditingTicket({ ...editingTicket, descripcion: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+                                <select value={editingTicket.estado} onChange={e => setEditingTicket({ ...editingTicket, estado: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-primary-500">
+                                    <option value="Pendiente">Pendiente</option>
+                                    <option value="En Reparación">En Reparación</option>
+                                    <option value="Resuelto">Resuelto</option>
+                                </select>
+                            </div>
+                            {canEditFinances && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Costo de Reparación ($)</label>
+                                    <input type="number" step="0.01" value={editingTicket.costo_reparacion} onChange={e => setEditingTicket({ ...editingTicket, costo_reparacion: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-red-500 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500" />
+                                </div>
+                            )}
+                        </div>
+                    </form>
                 )}
-            </AnimatePresence>
+            </Modal>
         </div>
     );
 }
