@@ -23,4 +23,4 @@ RUN apt-get update \
 COPY backend/ /app/
 
 # Iniciar Migraciones y luego el Servidor
-CMD ["sh", "-c", "alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${PORT:-8080}"]
+CMD ["sh", "-c", "set -e && python -m alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${PORT:-8080}"]

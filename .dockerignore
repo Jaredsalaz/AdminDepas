@@ -1,0 +1,12 @@
+backend/.env
+backend/venv/
+backend/__pycache__/
+frontend/node_modules/
+frontend/dist/
+.git/
+.env
+*.pyc
+*.pyo
+*.pyd
+.db
+local_dump.sql
