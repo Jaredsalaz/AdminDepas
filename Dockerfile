@@ -22,5 +22,5 @@ RUN apt-get update \
 # Copiar el resto del código del backend al contenedor
 COPY backend/ /app/
 
-# Iniciar Gunicorn escuchando en el puerto inyectado por la plataforma
-CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${PORT:-8080}"]
+# Iniciar Migraciones y luego el Servidor
+CMD ["sh", "-c", "alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${PORT:-8080}"]
