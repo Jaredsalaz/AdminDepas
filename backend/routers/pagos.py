@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, or_
@@ -7,6 +7,7 @@ from datetime import datetime
 from database import get_db
 import models, schemas
 from pdf_generator import generar_recibo_pdf
+from email_service import send_email, build_payment_receipt_email
 from routers.auth import require_admin, get_current_user, get_empresa_id
 
 router = APIRouter(
@@ -71,7 +72,7 @@ def read_pagos(
     }
 
 @router.post("", response_model=schemas.Pago)
-def create_pago(pago: schemas.PagoCreate, db: Session = Depends(get_db)):
+def create_pago(pago: schemas.PagoCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     contrato = db.query(models.Contrato).filter(models.Contrato.id == pago.contrato_id).first()
     if not contrato:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
@@ -80,6 +81,61 @@ def create_pago(pago: schemas.PagoCreate, db: Session = Depends(get_db)):
     db.add(db_pago)
     db.commit()
     db.refresh(db_pago)
+    
+    # Enviar recibo por correo al inquilino (en background para no bloquear)
+    inquilino = contrato.inquilino
+    depto = contrato.departamento
+    edificio = depto.edificio
+    empresa = edificio.empresa
+    
+    if inquilino.correo:
+        meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        mes_nombre = meses[db_pago.fecha_correspondiente.month - 1]
+        periodo_str = f"{mes_nombre} {db_pago.fecha_correspondiente.year}"
+        
+        pago_data = {
+            "id": db_pago.id,
+            "fecha_emision": db_pago.fecha_pago.strftime("%d/%m/%Y"),
+            "empresa_nombre": empresa.nombre,
+            "inquilino_nombre": f"{inquilino.nombre} {inquilino.apellidos}",
+            "inquilino_correo": inquilino.correo,
+            "inquilino_telefono": inquilino.telefono,
+            "edificio_nombre": edificio.nombre,
+            "departamento_numero": depto.numero,
+            "fecha_correspondiente": periodo_str,
+            "concepto": db_pago.concepto if hasattr(db_pago, 'concepto') else 'Renta Mensual',
+            "monto": float(db_pago.monto),
+            "recargos": float(db_pago.recargos) if db_pago.recargos else 0.0
+        }
+        
+        try:
+            # 1. Generar el PDF en memoria bytes
+            pdf_bytes = generar_recibo_pdf(pago_data).getvalue()
+            
+            # 2. Construir cuerpo del correo
+            html_body = build_payment_receipt_email(
+                empresa_nombre=empresa.nombre,
+                inquilino_nombre=inquilino.nombre,
+                depto_numero=depto.numero,
+                edificio_nombre=edificio.nombre,
+                monto_total=float(db_pago.monto) + (float(db_pago.recargos) if db_pago.recargos else 0),
+                fecha_pago=db_pago.fecha_pago.strftime("%d/%m/%Y"),
+                concepto=pago_data["concepto"]
+            )
+            
+            # 3. Enviar correo usando background task
+            attachment_name = f"Recibo_Pago_{db_pago.id:04d}.pdf"
+            background_tasks.add_task(
+                send_email,
+                to=inquilino.correo,
+                subject=f"Comprobante de Pago - {empresa.nombre}",
+                html_body=html_body,
+                attachment=pdf_bytes,
+                attachment_name=attachment_name
+            )
+        except Exception as e:
+            print(f"Error preparando email pre-envío: {e}")
+            
     return db_pago
 
 @router.get("/{pago_id}/recibo")

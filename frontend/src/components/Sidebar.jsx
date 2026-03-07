@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, Users, ReceiptText, Wrench, Settings, LogOut, ChevronDown, Wallet } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, ReceiptText, Wrench, Settings, LogOut, ChevronDown, Wallet, Server, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/usePermissions';
@@ -15,15 +15,23 @@ const navItems = [
     { name: 'Configuración', path: '/settings', icon: Settings },
 ];
 
+const superAdminNavItems = [
+    { name: 'SaaS Dashboard', path: '/superadmin', icon: Server },
+    { name: 'Empresas', path: '/superadmin/empresas', icon: Building2 },
+    { name: 'Catálogos', path: '/superadmin/catalogos', icon: FileText },
+];
+
 export default function Sidebar({ onClose }) {
     const { logout, empresaActiva, empresasDisponibles, seleccionarEmpresa, user } = useAuth();
     const { canEditFinances, isSuperAdmin } = usePermissions();
     const [showEmpresaSelector, setShowEmpresaSelector] = useState(false);
 
-    const availableNavItems = navItems.filter(item => {
-        if (item.name === 'Finanzas' && !canEditFinances) return false;
-        return true;
-    });
+    const availableNavItems = isSuperAdmin
+        ? superAdminNavItems
+        : navItems.filter(item => {
+            if (item.name === 'Finanzas' && !canEditFinances) return false;
+            return true;
+        });
 
     return (
         <motion.aside
@@ -38,9 +46,15 @@ export default function Sidebar({ onClose }) {
                 </h1>
 
                 {/* Selector de empresa / Nombre de empresa */}
-                {empresaActiva && (
+                {isSuperAdmin ? (
+                    <div className="mt-3 text-center">
+                        <span className="px-3 py-1 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 text-xs font-bold rounded-full">
+                            Portal SaaS
+                        </span>
+                    </div>
+                ) : empresaActiva && (
                     <div className="mt-3 relative">
-                        {isSuperAdmin && empresasDisponibles.length > 1 ? (
+                        {empresasDisponibles.length > 1 ? (
                             <>
                                 <button
                                     onClick={() => setShowEmpresaSelector(!showEmpresaSelector)}
@@ -92,6 +106,7 @@ export default function Sidebar({ onClose }) {
                     <NavLink
                         key={item.name}
                         to={item.path}
+                        end
                         className={({ isActive }) =>
                             `flex items-center px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive
                                 ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 shadow-sm'

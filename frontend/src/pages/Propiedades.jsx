@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Plus, MapPin, Grid, DoorOpen, MoreVertical, Search, X, CheckCircle, Clock, ChevronLeft, ChevronRight, Pencil, Save } from 'lucide-react';
+import { Building2, Plus, MapPin, Grid, DoorOpen, MoreVertical, Search, X, CheckCircle, Clock, ChevronLeft, ChevronRight, Pencil, Save, CreditCard, ArrowRight, Lock, ShieldCheck } from 'lucide-react';
 import { usePermissions } from '../context/usePermissions';
 import { useAuth } from '../context/AuthContext';
 import EmpresaSelector from '../components/EmpresaSelector';
@@ -22,8 +22,45 @@ export default function Propiedades() {
     const [nuevoEdificio, setNuevoEdificio] = useState({ nombre: '', direccion: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [nuevoDepto, setNuevoDepto] = useState({ numero: '', renta_mensual: '', inventario: '' });
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [isPaypalModalOpen, setIsPaypalModalOpen] = useState(false);
+    const [isStripeModalOpen, setIsStripeModalOpen] = useState(false);
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [selectedPlanToUpgrade, setSelectedPlanToUpgrade] = useState(null); // Plan seleccionado para pagar
     const [isSubmittingDepto, setIsSubmittingDepto] = useState(false);
     const [editingDepto, setEditingDepto] = useState(null); // Depa en edición
+    const [deptoToDelete, setDeptoToDelete] = useState(null); // Para modal de confirmación de eliminación
+
+    const [planesDisponibles, setPlanesDisponibles] = useState([]);
+
+    const fetchPlanes = async () => {
+        try {
+            const { data } = await api.get('/empresas/planes/suscripcion');
+            const mappedPlanes = data.map(plan => {
+                const limitText = plan.limite_edificios === null || plan.limite_edificios > 9000 ? "Edificios ilimitados" : `Hasta ${plan.limite_edificios} edificio(s)`;
+                return {
+                    id: plan.id,
+                    nombre: plan.nombre,
+                    precio: plan.precio_mensual,
+                    isPopular: plan.nombre.toLowerCase() === 'premium',
+                    beneficios: [
+                        limitText,
+                        plan.nombre.toLowerCase() === 'premium' ? 'Soporte prioritario' : 'Soporte estándar',
+                        plan.nombre.toLowerCase() === 'normal' ? 'Reportes básicos' : 'Reportes financieros avanzados'
+                    ]
+                };
+            }).filter(p => p.nombre.toLowerCase() !== 'normal'); // Evitar que compren el Normal si ya llegaron al límite de 1
+            setPlanesDisponibles(mappedPlanes);
+        } catch (error) {
+            console.error("Error al obtener planes:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (isUpgradeModalOpen && planesDisponibles.length === 0) {
+            fetchPlanes();
+        }
+    }, [isUpgradeModalOpen]);
 
     // Paginación
     const [currentPage, setCurrentPage] = useState(1);
@@ -63,7 +100,13 @@ export default function Propiedades() {
             setNuevoEdificio({ nombre: '', direccion: '' });
             toast.success("Edificio registrado exitosamente");
         } catch (error) {
-            console.error("Error guardando edificio:", error);
+            if (error.response?.data?.detail === "PLAN_LIMIT_REACHED") {
+                setIsCreateModalOpen(false);
+                setIsUpgradeModalOpen(true);
+            } else {
+                toast.error(error.response?.data?.detail || "Error al registrar el edificio");
+                console.error("Error guardando edificio:", error);
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -95,11 +138,11 @@ export default function Propiedades() {
         }
     };
 
-    const handleDeleteDepto = async (deptoId) => {
-        if (!window.confirm('¿Estás seguro de eliminar este departamento?')) return;
+    const confirmDeleteDepto = async () => {
+        if (!deptoToDelete) return;
 
         try {
-            await api.delete(`/edificios/departamentos/${deptoId}`);
+            await api.delete(`/edificios/departamentos/${deptoToDelete.id}`);
 
             // Recargar
             const { data } = await api.get(`/edificios?page=${currentPage}&per_page=9`);
@@ -108,7 +151,10 @@ export default function Propiedades() {
             if (edificioActualizado) setSelectedEdificio(edificioActualizado);
             toast.success("Departamento eliminado");
         } catch (error) {
+            toast.error(error.response?.data?.detail || "Error al eliminar departamento");
             console.error("Error eliminando departamento:", error);
+        } finally {
+            setDeptoToDelete(null);
         }
     };
 
@@ -458,7 +504,7 @@ export default function Propiedades() {
                                                         </button>
                                                         {canDeleteData && (
                                                             <button
-                                                                onClick={() => handleDeleteDepto(depa.id)}
+                                                                onClick={() => setDeptoToDelete(depa)}
                                                                 className="text-gray-300 hover:text-red-500 transition-colors p-1"
                                                                 title="Eliminar Departamento"
                                                             >
@@ -513,6 +559,257 @@ export default function Propiedades() {
                         <input type="text" required value={nuevoEdificio.direccion} onChange={(e) => setNuevoEdificio({ ...nuevoEdificio, direccion: e.target.value })} placeholder="Ej. Av. Paseo de los Leones 123" className="w-full px-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm" />
                     </div>
                 </form>
+            </Modal>
+
+            {/* Modal de Upgrade (Límite de Suscripción) */}
+            <Modal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => {
+                    setIsUpgradeModalOpen(false);
+                    setTimeout(() => setSelectedPlanToUpgrade(null), 300); // Reset after close
+                }}
+                title={selectedPlanToUpgrade ? "Seleccionar Método de Pago" : "Límite de Plan Alcanzado"}
+                icon={Lock}
+                iconColor="text-yellow-500"
+                footer={
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => setIsUpgradeModalOpen(false)} className="btn-secondary">Cancelar</button>
+                    </div>
+                }
+            >
+                <div className="p-6 text-center">
+                    {!selectedPlanToUpgrade ? (
+                        <>
+                            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Building2 className="w-8 h-8 text-yellow-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">¡Ups! Llegaste al límite</h3>
+                            <p className="text-gray-600 dark:text-gray-400 mb-6">
+                                Tu plan actual no permite registrar más edificios. Selecciona un nuevo plan para continuar creciendo.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 text-left">
+                                {planesDisponibles.map(plan => (
+                                    <div key={plan.id} className={`border-2 rounded-2xl p-4 cursor-pointer transition-all flex flex-col ${plan.isPopular ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10' : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'}`} onClick={() => setSelectedPlanToUpgrade(plan)}>
+                                        {plan.isPopular && <div className="text-xs font-bold text-primary-500 uppercase mb-1">Más Popular</div>}
+                                        <h4 className="font-bold text-gray-800 dark:text-white text-lg">{plan.nombre}</h4>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-3">${plan.precio} <span className="text-sm font-normal text-gray-500">/mes</span></p>
+                                        <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4 flex-1">
+                                            {plan.beneficios.map((b, i) => (
+                                                <li key={i} className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" /> <span>{b}</span></li>
+                                            ))}
+                                        </ul>
+                                        <button className={`w-full py-2 rounded-xl font-medium transition ${plan.isPopular ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'}`}>
+                                            Seleccionar Plan
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="animate-fade-in text-left">
+                            <button onClick={() => setSelectedPlanToUpgrade(null)} className="flex items-center text-sm text-gray-500 hover:text-primary-500 mb-6 transition">
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Volver a planes
+                            </button>
+
+                            <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-800 rounded-xl p-5 mb-6">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium">Plan seleccionado:</span>
+                                    <span className="font-bold text-gray-900 dark:text-white bg-white dark:bg-dark-surface px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                                        {selectedPlanToUpgrade.nombre}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium">Total a pagar:</span>
+                                    <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                                        ${selectedPlanToUpgrade.precio} <span className="text-sm font-normal text-gray-500">USD/mes</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-4">Elige tu método de pago preferido para completar la suscripción.</p>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-transform hover:scale-[1.02]"
+                                    onClick={() => {
+                                        setIsUpgradeModalOpen(false);
+                                        setIsStripeModalOpen(true);
+                                    }}
+                                >
+                                    <CreditCard className="w-5 h-5" /> Pagar con Tarjeta <ArrowRight className="w-4 h-4" />
+                                </button>
+                                <button
+                                    className="w-full flex items-center justify-center gap-2 bg-[#ffc439] hover:bg-[#e5a819] text-gray-900 font-bold py-3 px-4 rounded-xl shadow transition-transform hover:scale-[1.02]"
+                                    onClick={() => {
+                                        setIsUpgradeModalOpen(false);
+                                        setIsPaypalModalOpen(true);
+                                    }}
+                                >
+                                    PayPal <ArrowRight className="w-4 h-4 text-gray-600" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Simulación: Modal Stripe (Tarjeta de Crédito) */}
+            <Modal
+                isOpen={isStripeModalOpen}
+                onClose={() => !isProcessingPayment && setIsStripeModalOpen(false)}
+                title="Pago Seguro con Tarjeta"
+                icon={ShieldCheck}
+                iconColor="text-blue-500"
+                footer={
+                    <div className="flex justify-end gap-3 w-full">
+                        <button
+                            type="button"
+                            disabled={isProcessingPayment}
+                            onClick={() => setIsStripeModalOpen(false)}
+                            className="btn-secondary disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            disabled={isProcessingPayment}
+                            onClick={() => {
+                                setIsProcessingPayment(true);
+                                setTimeout(() => {
+                                    setIsProcessingPayment(false);
+                                    setIsStripeModalOpen(false);
+                                    toast.success("¡Pago procesado con éxito! Plan actualizado a Premium.");
+                                }, 2500);
+                            }}
+                            className="btn-primary w-full max-w-[200px] flex items-center justify-center disabled:opacity-50"
+                        >
+                            {isProcessingPayment ? 'Procesando...' : 'Pagar $99.00 USD'}
+                        </button>
+                    </div>
+                }
+            >
+                <div className="p-6">
+                    <div className="bg-blue-50 dark:bg-dark-bg p-4 rounded-xl mb-6 flex justify-between items-center border border-blue-100 dark:border-gray-800">
+                        <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Total a pagar ({selectedPlanToUpgrade?.nombre})</p>
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white">${selectedPlanToUpgrade?.precio || "99.00"} <span className="text-sm font-normal text-gray-500">USD/mes</span></p>
+                        </div>
+                        <div className="w-12 h-12 bg-white dark:bg-dark-surface rounded-full flex items-center justify-center shadow-sm">
+                            <CreditCard className="w-6 h-6 text-blue-500" />
+                        </div>
+                    </div>
+
+                    <form className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Titular de la tarjeta</label>
+                            <input type="text" placeholder="Ej. Juan Pérez" className="w-full px-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Número de tarjeta</label>
+                            <div className="relative">
+                                <CreditCard className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" placeholder="0000 0000 0000 0000" className="w-full pl-10 pr-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all font-mono" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de exp.</label>
+                                <input type="text" placeholder="MM/AA" className="w-full px-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all font-mono" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CVC</label>
+                                <div className="relative">
+                                    <Lock className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input type="text" placeholder="123" className="w-full px-4 py-2 bg-white dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all font-mono" />
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-xs text-center text-gray-500 flex items-center justify-center gap-1 mt-6">
+                            <ShieldCheck className="w-4 h-4 text-green-500" /> Transacción encriptada y segura.
+                        </p>
+                    </form>
+                </div>
+            </Modal>
+
+            {/* Simulación: Modal PayPal */}
+            <Modal
+                isOpen={isPaypalModalOpen}
+                onClose={() => !isProcessingPayment && setIsPaypalModalOpen(false)}
+                title="Pagar con PayPal"
+                icon={CreditCard}
+                footer={null}
+            >
+                <div className="p-8 text-center bg-gray-50 dark:bg-dark-surface/50">
+                    <div className="mb-6 flex justify-center">
+                        <div className="bg-[#003087] text-white font-bold italic text-3xl px-6 py-2 rounded shadow-lg">
+                            Pay<span className="text-[#009cde]">Pal</span>
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-dark-bg p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6">
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Monto de Suscripción ({selectedPlanToUpgrade?.nombre})</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">${selectedPlanToUpgrade?.precio || "99.00"} <span className="text-sm font-normal text-gray-500">USD</span></p>
+                        <p className="text-xs text-gray-400">Se cobrará de forma segura desde tu cuenta de PayPal o tarjeta asociada.</p>
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                        Estás a un clic de actualizar a {selectedPlanToUpgrade?.nombre || "Premium"} y obtener más beneficios.
+                    </p>
+
+                    <button
+                        disabled={isProcessingPayment}
+                        onClick={() => {
+                            setIsProcessingPayment(true);
+                            setTimeout(() => {
+                                setIsProcessingPayment(false);
+                                setIsPaypalModalOpen(false);
+                                toast.success("¡Pago con PayPal exitoso! Eres Premium.");
+                            }, 3000);
+                        }}
+                        className="w-full bg-[#ffc439] hover:bg-[#f4bb33] text-gray-900 font-bold text-lg py-4 px-6 rounded-full shadow-md transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
+                    >
+                        {isProcessingPayment ? (
+                            <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
+                        ) : 'Completar Compra'}
+                    </button>
+
+                    <button
+                        disabled={isProcessingPayment}
+                        onClick={() => setIsPaypalModalOpen(false)}
+                        className="mt-4 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition"
+                    >
+                        Cancelar y volver a la app
+                    </button>
+                </div>
+            </Modal>
+            {/* Modal de Confirmación de Eliminación */}
+            <Modal
+                isOpen={!!deptoToDelete}
+                onClose={() => setDeptoToDelete(null)}
+                title="Eliminar Departamento"
+                icon={X}
+                iconColor="text-red-500"
+                size="sm"
+                footer={
+                    <div className="flex justify-end gap-3 w-full">
+                        <button type="button" onClick={() => setDeptoToDelete(null)} className="btn-secondary">
+                            Cancelar
+                        </button>
+                        <button type="button" onClick={confirmDeleteDepto} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-medium rounded-xl shadow-sm transition-colors cursor-pointer">
+                            Eliminar
+                        </button>
+                    </div>
+                }
+            >
+                <div className="p-6">
+                    <p className="text-gray-700 dark:text-gray-300 mb-2">
+                        ¿Estás seguro de que deseas eliminar el departamento <span className="font-bold">{deptoToDelete?.numero}</span>?
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Esta acción no se puede deshacer. Se conservará un registro temporal de los datos que no se puedan eliminar si están en uso.
+                    </p>
+                </div>
             </Modal>
         </div>
     );

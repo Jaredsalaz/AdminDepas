@@ -9,6 +9,9 @@ import Finanzas from './pages/Finanzas';
 import Cobranza from './pages/Cobranza';
 import Configuracion from './pages/Configuracion';
 import Login from './pages/Login';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import SuperAdminEmpresas from './pages/SuperAdminEmpresas';
+import SuperAdminCatalogos from './pages/SuperAdminCatalogos';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { usePermissions } from './context/usePermissions';
@@ -51,6 +54,23 @@ function AppContent() {
         } />
         <Route path="mantenimiento" element={<Mantenimiento />} />
         <Route path="settings" element={<Configuracion />} />
+
+        {/* SuperAdmin Routes */}
+        <Route path="superadmin" element={
+          <RoleProtectedRoute requiredPermission="isSuperAdmin">
+            <SuperAdminDashboard />
+          </RoleProtectedRoute>
+        } />
+        <Route path="superadmin/empresas" element={
+          <RoleProtectedRoute requiredPermission="isSuperAdmin">
+            <SuperAdminEmpresas />
+          </RoleProtectedRoute>
+        } />
+        <Route path="superadmin/catalogos" element={
+          <RoleProtectedRoute requiredPermission="isSuperAdmin">
+            <SuperAdminCatalogos />
+          </RoleProtectedRoute>
+        } />
 
         {/* Ruta por defecto para 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />

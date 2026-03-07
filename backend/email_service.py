@@ -1,6 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 import os
 from dotenv import load_dotenv
 
@@ -9,15 +10,24 @@ load_dotenv()
 GMAIL_USER = os.getenv("GMAIL_USER", "jared.salazar65@unach.mx")
 GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "wagy qtiz xjrb tsco")
 
-def send_email(to: str, subject: str, html_body: str) -> bool:
-    """Envía un correo HTML via Gmail SMTP. Retorna True si fue exitoso."""
+def send_email(to: str, subject: str, html_body: str, attachment: bytes = None, attachment_name: str = None) -> bool:
+    """Envía un correo HTML via Gmail SMTP con adjunto opcional. Retorna True si fue exitoso."""
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"] = f"DepaAdmin PMS <{GMAIL_USER}>"
         msg["To"] = to
 
-        msg.attach(MIMEText(html_body, "html"))
+        # Añadir el cuerpo HTML
+        msg_body = MIMEMultipart("alternative")
+        msg_body.attach(MIMEText(html_body, "html"))
+        msg.attach(msg_body)
+
+        # Añadir el PDF adjunto si existe
+        if attachment and attachment_name:
+            part = MIMEApplication(attachment, Name=attachment_name)
+            part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
+            msg.attach(part)
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.ehlo()
@@ -91,6 +101,84 @@ def build_rent_reminder_email(
             </div>
             <div class="footer">
                 Este es un mensaje automático de DepaAdmin PMS. No respondas a este correo.
+            </div>
+        </div>
+    </body>
+        </div>
+    </body>
+    </html>
+    """
+
+def build_payment_receipt_email(
+    empresa_nombre: str,
+    inquilino_nombre: str,
+    depto_numero: str,
+    edificio_nombre: str,
+    monto_total: float,
+    fecha_pago: str,
+    concepto: str
+) -> str:
+    """Genera el HTML del correo de comprobante de pago."""
+    return f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+            .header {{ background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center; color: white; }}
+            .header h1 {{ margin: 0; font-size: 26px; }}
+            .header p {{ color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 14px; }}
+            .body {{ padding: 30px; color: #374151; line-height: 1.6; }}
+            .success-icon {{ background: #ecfdf5; color: #10b981; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px auto; }}
+            .greeting {{ font-size: 18px; font-weight: 600; color: #111827; }}
+            .info-card {{ background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0; }}
+            .info-row {{ display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed #e5e7eb; padding-bottom: 10px; }}
+            .info-row:last-child {{ margin-bottom: 0; border-bottom: none; padding-bottom: 0; }}
+            .info-label {{ color: #6b7280; font-size: 14px; }}
+            .info-value {{ font-weight: 600; color: #111827; font-size: 14px; text-align: right; }}
+            .amount-total {{ font-size: 28px; font-weight: 800; color: #10b981; text-align: center; margin: 20px 0; }}
+            .footer {{ background: #f8f9fa; padding: 20px; text-align: center; color: #9ca3af; font-size: 12px; border-top: 1px solid #f3f4f6; }}
+            .footer p {{ margin: 5px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>✅ ¡Pago Recibido Exitosamente!</h1>
+                <p>{empresa_nombre}</p>
+            </div>
+            <div class="body">
+                <div style="text-align: center; font-size: 40px; margin-bottom: 15px;">🎉</div>
+                <p class="greeting">Hola {inquilino_nombre},</p>
+                <p>Te confirmamos que hemos procesado tu pago correctamente. A continuación, encontrarás los detalles de tu transacción:</p>
+
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">Concepto</span>
+                        <span class="info-value">{concepto}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Propiedad</span>
+                        <span class="info-value">Depa {depto_numero} - {edificio_nombre}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Fecha de Pago</span>
+                        <span class="info-value">{fecha_pago}</span>
+                    </div>
+                </div>
+
+                <div class="amount-total">${monto_total:,.2f} USD</div>
+
+                <p style="text-align: center; font-size: 14px; color: #4b5563;">
+                    Adjunto a este correo encontrarás el comprobante en formato PDF.<br/>
+                    <strong>¡Gracias por tu pago puntual!</strong>
+                </p>
+            </div>
+            <div class="footer">
+                <p>Este es un mensaje automático generado por DepaAdmin PMS.</p>
+                <p>Si tienes alguna duda sobre este cargo, por favor comunícate con la administración.</p>
             </div>
         </div>
     </body>

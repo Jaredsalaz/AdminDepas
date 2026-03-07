@@ -14,6 +14,7 @@ export default function Finanzas() {
     const [pagos, setPagos] = useState([]);
     const [contratosActivos, setContratosActivos] = useState([]);
     const [edificios, setEdificios] = useState([]);
+    const [estadoCuenta, setEstadoCuenta] = useState([]); // <-- Nuevo estado para guardar los status de cobranza
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -43,6 +44,12 @@ export default function Finanzas() {
         recargos: '0'
     });
 
+    const [selectedStatus, setSelectedStatus] = useState(null); // <-- Guardar status del contrato seleccionado para el UI
+
+    // Estados para el buscador del contrato
+    const [busquedaContrato, setBusquedaContrato] = useState('');
+    const [dropdownAbierto, setDropdownAbierto] = useState(false);
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -56,10 +63,11 @@ export default function Finanzas() {
             if (filtros.concepto) params.append('concepto', filtros.concepto);
             if (filtros.edificio_id) params.append('edificio_id', filtros.edificio_id);
 
-            const [pagosRes, contratosRes, edificiosRes] = await Promise.all([
+            const [pagosRes, contratosRes, edificiosRes, estadoCuentaRes] = await Promise.all([
                 api.get(`/pagos?${params.toString()}`),
                 api.get('/contratos'),
-                api.get('/edificios')
+                api.get('/edificios'),
+                api.get('/cobranza/estado_cuenta?limit=1000') // <-- Para tener el status de todos
             ]);
 
             setPagos(pagosRes.data?.items || []);
@@ -67,6 +75,7 @@ export default function Finanzas() {
             setTotalPages(Math.ceil((pagosRes.data?.total || 0) / limit));
             setContratosActivos(contratosRes.data?.items || contratosRes.data || []);
             setEdificios(edificiosRes.data?.items || edificiosRes.data || []);
+            setEstadoCuenta(estadoCuentaRes.data?.items || []);
 
             // Calcular ingresos (suma global no siempre es posible si solo traemos 15, esto debe venir del backend o limitarse a los visibles)
             const items = pagosRes.data?.items || [];
@@ -85,15 +94,20 @@ export default function Finanzas() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaActiva?.id, page, searchTerm, filtros]);
 
-    // Cuando selecciona un contrato, autocompletar el monto de la renta mensual
+    // Cuando selecciona un contrato, autocompletar el monto de la renta mensual y mostrar estado
     const handleContratoSelect = (contratoId) => {
         const contrato = contratosActivos.find(c => c.id.toString() === contratoId);
+        const status = estadoCuenta.find(s => s.contrato_id.toString() === contratoId);
+
         if (contrato) {
             setNuevoPago({
                 ...nuevoPago,
                 contrato_id: contratoId,
                 monto: contrato.renta_mensual
             });
+            setSelectedStatus(status || null);
+        } else {
+            setSelectedStatus(null);
         }
     };
 
@@ -112,6 +126,7 @@ export default function Finanzas() {
             await fetchData();
             setIsModalOpen(false);
             setNuevoPago({ contrato_id: '', fecha_correspondiente: new Date().toISOString().split('T')[0], concepto: 'Renta Mensual', monto: '', recargos: '0' });
+            setSelectedStatus(null);
             toast.success("Pago registrado exitosamente");
         } catch (error) {
             console.error("Error ingresando pago:", error);
@@ -153,6 +168,16 @@ export default function Finanzas() {
 
     // Eliminar filtro local, el backend ahora filtra de forma nativa.
     const filteredPagos = pagos;
+
+    // Filtrado de contratos para el dropdown buscador
+    const contratosFiltrados = contratosActivos.filter(c => {
+        const query = busquedaContrato.toLowerCase();
+        return (
+            (c.inquilino_nombre_completo && c.inquilino_nombre_completo.toLowerCase().includes(query)) ||
+            (c.departamento_numero && c.departamento_numero.toLowerCase().includes(query)) ||
+            (c.edificio_nombre && c.edificio_nombre.toLowerCase().includes(query))
+        );
+    });
 
     return (
         <div className="space-y-6">
@@ -400,7 +425,12 @@ export default function Finanzas() {
             {/* Modal Registrar Pago */}
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setSelectedStatus(null);
+                    setDropdownAbierto(false);
+                    setBusquedaContrato('');
+                }}
                 title="Registrar Ingreso"
                 subtitle="Captura el pago de renta de un inquilino activo."
                 icon={DollarSign}
@@ -419,22 +449,114 @@ export default function Finanzas() {
             >
                 <form id="pago-form" onSubmit={handleCrearPago} className="p-6 space-y-5">
 
-                    <div>
+                    <div className="relative">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contrato Activo</label>
+
+                        <div
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm cursor-pointer flex justify-between items-center"
+                            onClick={() => setDropdownAbierto(!dropdownAbierto)}
+                        >
+                            <span className={nuevoPago.contrato_id ? "text-gray-900 dark:text-white" : "text-gray-500"}>
+                                {nuevoPago.contrato_id
+                                    ? (() => {
+                                        const c = contratosActivos.find(c => c.id.toString() === nuevoPago.contrato_id.toString());
+                                        return c ? `${c.inquilino_nombre_completo} - Depa ${c.departamento_numero} (${c.edificio_nombre})` : 'Selecciona...';
+                                    })()
+                                    : "Selecciona quién está pagando..."}
+                            </span>
+                            <Search className="w-4 h-4 text-gray-400" />
+                        </div>
+
+                        {/* Menú Desplegable con Buscador */}
+                        {dropdownAbierto && (
+                            <div className="w-full mt-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-xl shadow-inner max-h-60 overflow-y-auto custom-scrollbar">
+                                <div className="p-3 sticky top-0 bg-white dark:bg-dark-surface border-b border-gray-100 dark:border-gray-800 z-10">
+                                    <div className="relative">
+                                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            placeholder="Buscar por inquilino, edificio o departamento..."
+                                            value={busquedaContrato}
+                                            onChange={(e) => setBusquedaContrato(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="py-2">
+                                    {contratosFiltrados.length > 0 ? (
+                                        contratosFiltrados.map(c => (
+                                            <div
+                                                key={c.id}
+                                                className={`px-4 py-2 hover:bg-gray-50 dark:hover:bg-dark-bg cursor-pointer transition-colors ${nuevoPago.contrato_id.toString() === c.id.toString() ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}`}
+                                                onClick={() => {
+                                                    handleContratoSelect(c.id.toString());
+                                                    setDropdownAbierto(false);
+                                                }}
+                                            >
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                                                    {c.inquilino_nombre_completo}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    Depa {c.departamento_numero} • {c.edificio_nombre}
+                                                </p>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                                            No se encontraron inquilinos o contratos.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Selector oculto para la validación nativa del form */}
                         <select
                             required
                             value={nuevoPago.contrato_id}
-                            onChange={(e) => handleContratoSelect(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 dark:text-white transition-all shadow-sm"
+                            onChange={() => { }} // dummy onChange
+                            className="absolute opacity-0 pointer-events-none w-full h-0 bottom-0"
+                            tabIndex="-1"
                         >
                             <option value="">Selecciona quién está pagando...</option>
                             {contratosActivos.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.inquilino_nombre_completo} - Depa {c.departamento_numero} ({c.edificio_nombre})
-                                </option>
+                                <option key={c.id} value={c.id}>{c.inquilino_nombre_completo}</option>
                             ))}
                         </select>
                     </div>
+
+                    {/* Estado del Inquilino Seleccionado */}
+                    {selectedStatus && (
+                        <div className={`p-4 rounded-xl border ${selectedStatus.estado === 'Morosos'
+                            ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30'
+                            : selectedStatus.estado === 'Adelantado'
+                                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-900/30'
+                                : 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-900/30'
+                            }`}>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className={`text-sm font-bold flex items-center gap-1 ${selectedStatus.estado === 'Morosos' ? 'text-red-700 dark:text-red-400' :
+                                    selectedStatus.estado === 'Adelantado' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'
+                                    }`}>
+                                    {selectedStatus.estado === 'Morosos' ? <X className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                                    Estado: {selectedStatus.estado}
+                                </span>
+                                {selectedStatus.estado === 'Morosos' && (
+                                    <span className="text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-2 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                        ¡{selectedStatus.dias_atraso} días de atraso!
+                                    </span>
+                                )}
+                            </div>
+                            <p className={`text-xs ${selectedStatus.estado === 'Morosos' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                                }`}>
+                                {selectedStatus.estado === 'Morosos'
+                                    ? `Adeuda: ${formatMoney(selectedStatus.monto_adeudado)} (${selectedStatus.meses_adeudados} meses)`
+                                    : `Todo en orden. Próximo pago: ${formatDate(selectedStatus.proximo_pago)}`
+                                }
+                            </p>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>

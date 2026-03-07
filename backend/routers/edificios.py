@@ -64,6 +64,13 @@ def create_edificio(
     if not empresa_id:
         raise HTTPException(status_code=400, detail="Se requiere empresa_id. SuperAdmin debe enviar header X-Empresa-Id.")
     
+    # Validar limite de edificios segun plan de suscripción
+    empresa = db.query(models.Empresa).filter(models.Empresa.id == empresa_id).first()
+    if empresa and empresa.plan and empresa.plan.limite_edificios is not None:
+        total_edificios = db.query(models.Edificio).filter(models.Edificio.empresa_id == empresa_id).count()
+        if total_edificios >= empresa.plan.limite_edificios:
+            raise HTTPException(status_code=403, detail="PLAN_LIMIT_REACHED")
+
     db_edificio = models.Edificio(
         empresa_id=empresa_id,
         nombre=edificio.nombre,
@@ -140,6 +147,18 @@ def update_departamento(
         if not edificio:
             raise HTTPException(status_code=403, detail="No tienes permiso para modificar este departamento")
     
+    # Validar que no se intente quitar el estado "Rentado" si hay un contrato activo
+    if depto.estado == "Rentado" and depto_update.estado != "Rentado":
+        contratos_activos = db.query(models.Contrato).filter(
+            models.Contrato.departamento_id == depto_id,
+            models.Contrato.estado == "Activo"
+        ).first()
+        if contratos_activos:
+            raise HTTPException(
+                status_code=400, 
+                detail="No puedes cambiar el estado del departamento porque tiene un contrato activo. Finaliza el contrato primero."
+            )
+    
     depto.numero = depto_update.numero
     depto.renta_mensual = depto_update.renta_mensual
     depto.inventario = depto_update.inventario
@@ -157,6 +176,17 @@ def delete_departamento(
     depto = db.query(models.Departamento).filter(models.Departamento.id == depto_id).first()
     if not depto:
         raise HTTPException(status_code=404, detail="Departamento no encontrado")
+    
+    if depto.estado == "Rentado":
+        raise HTTPException(status_code=400, detail="No se puede eliminar un departamento que está actualmente rentado.")
+    
+    # También verificar si tiene contratos activos (por si el estado quedó desincronizado)
+    contratos_activos = db.query(models.Contrato).filter(
+        models.Contrato.departamento_id == depto_id,
+        models.Contrato.estado == "Activo"
+    ).first()
+    if contratos_activos:
+        raise HTTPException(status_code=400, detail="No se puede eliminar porque tiene un contrato activo asociado.")
     
     db.delete(depto)
     db.commit()

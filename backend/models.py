@@ -3,6 +3,24 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
+class PlanSuscripcion(Base):
+    __tablename__ = "planes_suscripcion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, nullable=False, unique=True)  # Normal, Estandar, Premium
+    limite_edificios = Column(Integer, nullable=True)  # NULL = Ilimitado
+    precio_mensual = Column(Numeric(10, 2), nullable=False)
+    activo = Column(Boolean, default=True)
+
+    empresas = relationship("Empresa", back_populates="plan")
+
+class TipoPago(Base):
+    __tablename__ = "tipos_pago"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, nullable=False, unique=True)  # Tarjeta, Transferencia, OXXO, etc.
+    activo = Column(Boolean, default=True)
+
 class Empresa(Base):
     __tablename__ = "empresas"
 
@@ -15,7 +33,12 @@ class Empresa(Base):
     logo_url = Column(String)
     activa = Column(Boolean, default=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
+    
+    plan_id = Column(Integer, ForeignKey("planes_suscripcion.id"), nullable=True)
+    estado_suscripcion = Column(String, default="Activa")  # Activa, Vencida, Suspendida
+    fecha_vencimiento = Column(DateTime, nullable=True)
 
+    plan = relationship("PlanSuscripcion", back_populates="empresas")
     usuarios = relationship("Usuario", back_populates="empresa")
     edificios = relationship("Edificio", back_populates="empresa")
 

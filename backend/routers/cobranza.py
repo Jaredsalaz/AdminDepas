@@ -53,6 +53,11 @@ def get_estado_cuenta(
         monto_adeudado = max(0, meses_adeudados) * renta
         
         proximo_pago = fecha_inc + relativedelta(months=pagos_completados)
+        dias_atraso = 0
+        
+        if meses_adeudados > 0:
+            dias_atraso_calc = (hoy - proximo_pago).days
+            dias_atraso = max(0, dias_atraso_calc)
         
         resultados.append({
             "contrato_id": c.id,
@@ -63,7 +68,8 @@ def get_estado_cuenta(
             "estado": estado,
             "meses_adeudados": meses_adeudados,
             "monto_adeudado": monto_adeudado,
-            "proximo_pago": proximo_pago.isoformat()
+            "proximo_pago": proximo_pago.isoformat(),
+            "dias_atraso": dias_atraso
         })
         
     return {

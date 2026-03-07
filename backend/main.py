@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import edificios, tickets, inquilinos, contratos, pagos, auth, empresas, cobranza
+from routers import edificios, tickets, inquilinos, contratos, pagos, auth, empresas, cobranza, superadmin
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
@@ -45,6 +45,7 @@ app.include_router(pagos.router)
 app.include_router(auth.router)
 app.include_router(empresas.router)
 app.include_router(cobranza.router)
+app.include_router(superadmin.router)
 
 @app.get("/")
 def read_root():

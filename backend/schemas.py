@@ -3,6 +3,35 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 
+# --- SUPERADMIN CATALOGOS ---
+class PlanSuscripcionBase(BaseModel):
+    nombre: str
+    limite_edificios: Optional[int] = None
+    precio_mensual: Decimal
+    activo: bool = True
+
+class PlanSuscripcionCreate(PlanSuscripcionBase):
+    pass
+
+class PlanSuscripcion(PlanSuscripcionBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class TipoPagoBase(BaseModel):
+    nombre: str
+    activo: bool = True
+
+class TipoPagoCreate(TipoPagoBase):
+    pass
+
+class TipoPago(TipoPagoBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 # --- EMPRESAS ---
 class EmpresaBase(BaseModel):
     nombre: str
@@ -11,6 +40,9 @@ class EmpresaBase(BaseModel):
     telefono: Optional[str] = None
     correo: Optional[str] = None
     logo_url: Optional[str] = None
+    plan_id: Optional[int] = None
+    estado_suscripcion: Optional[str] = "Activa"
+    fecha_vencimiento: Optional[datetime] = None
 
 class EmpresaCreate(EmpresaBase):
     # Opcionalmente crear con un admin inicial
@@ -21,7 +53,8 @@ class EmpresaCreate(EmpresaBase):
 class Empresa(EmpresaBase):
     id: int
     activa: bool = True
-    fecha_creacion: datetime
+    fecha_creacion: Optional[datetime] = None
+    plan: Optional[PlanSuscripcion] = None
 
     class Config:
         from_attributes = True

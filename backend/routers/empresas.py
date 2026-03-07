@@ -10,6 +10,13 @@ router = APIRouter(
     tags=["empresas"]
 )
 
+@router.get("/planes/suscripcion", response_model=List[schemas.PlanSuscripcion])
+def get_planes_public(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    return db.query(models.PlanSuscripcion).all()
+
 @router.get("", response_model=List[schemas.Empresa])
 def list_empresas(
     db: Session = Depends(get_db),

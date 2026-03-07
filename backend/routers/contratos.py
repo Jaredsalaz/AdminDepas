@@ -177,9 +177,9 @@ def finalizar_contrato(
     contrato.motivo_terminacion = "Finalización Normal"
     contrato.fecha_terminacion = datetime.utcnow()
 
-    # 2. Liberar departamento
+    # 2. Liberar departamento a Mantenimiento
     depto = contrato.departamento
-    depto.estado = "Disponible"
+    depto.estado = "Mantenimiento"
 
     # 3. Crear pago de devolución de depósito (si hay depósito)
     pago_devolucion = None
@@ -229,9 +229,9 @@ def incumplimiento_contrato(
     contrato.motivo_terminacion = "Incumplimiento"
     contrato.fecha_terminacion = datetime.utcnow()
 
-    # 2. Liberar departamento
+    # 2. Liberar departamento a Mantenimiento
     depto = contrato.departamento
-    depto.estado = "Disponible"
+    depto.estado = "Mantenimiento"
 
     # 3. NO se devuelve el depósito
     db.commit()
