@@ -266,3 +266,80 @@ def get_dashboard_metrics(
             } for emp in proximos_vence
         ]
     }
+
+# --- GESTIÓN DE USUARIOS (SaaS) ---
+@router.get("/usuarios", response_model=List[schemas.UsuarioOut])
+def get_all_usuarios_saas(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(check_is_superadmin)
+):
+    usuarios = db.query(models.Usuario).all()
+    result = []
+    for u in usuarios:
+        u_dict = u.__dict__.copy()
+        u_dict["empresa_nombre"] = u.empresa.nombre if u.empresa else None
+        result.append(u_dict)
+    return result
+
+@router.post("/usuarios", response_model=schemas.UsuarioOut)
+def create_usuario_saas(
+    usuario: schemas.UsuarioCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(check_is_superadmin)
+):
+    email_lower = usuario.email.lower()
+    existing = db.query(models.Usuario).filter(models.Usuario.email == email_lower).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado en el sistema")
+        
+    hashed_password = get_password_hash(usuario.password)
+    db_user = models.Usuario(
+        empresa_id=usuario.empresa_id,
+        nombre=usuario.nombre,
+        email=email_lower,
+        hashed_password=hashed_password,
+        rol=usuario.rol,
+        activo=usuario.activo
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.put("/usuarios/{user_id}", response_model=schemas.UsuarioOut)
+def update_usuario_saas(
+    user_id: int,
+    user_data: schemas.UsuarioSuperUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(check_is_superadmin)
+):
+    db_user = db.query(models.Usuario).filter(models.Usuario.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    if user_data.email:
+        email_lower = user_data.email.lower()
+        if email_lower != db_user.email:
+            existing = db.query(models.Usuario).filter(models.Usuario.email == email_lower).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="El correo ya está registrado por otro usuario")
+            db_user.email = email_lower
+
+    if user_data.nombre is not None:
+        db_user.nombre = user_data.nombre
+    if user_data.rol is not None:
+        db_user.rol = user_data.rol
+    if user_data.activo is not None:
+        db_user.activo = user_data.activo
+    if user_data.empresa_id is not None:
+        if user_data.empresa_id == 0:  # Allow unsetting to None for SuperAdmin
+            db_user.empresa_id = None
+        else:
+            db_user.empresa_id = user_data.empresa_id
+            
+    if user_data.password:
+        db_user.hashed_password = get_password_hash(user_data.password)
+        
+    db.commit()
+    db.refresh(db_user)
+    return db_user

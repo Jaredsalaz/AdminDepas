@@ -193,6 +193,14 @@ class UsuarioCreate(UsuarioBase):
     password: str
     empresa_id: Optional[int] = None
 
+class UsuarioSuperUpdate(BaseModel):
+    nombre: Optional[str] = None
+    email: Optional[str] = None
+    rol: Optional[str] = None
+    activo: Optional[bool] = None
+    empresa_id: Optional[int] = None
+    password: Optional[str] = None
+
 class UsuarioOut(UsuarioBase):
     id: int
     empresa_id: Optional[int] = None

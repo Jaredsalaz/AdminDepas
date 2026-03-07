@@ -11,6 +11,7 @@ import Configuracion from './pages/Configuracion';
 import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import SuperAdminEmpresas from './pages/SuperAdminEmpresas';
+import SuperAdminUsuarios from './pages/SuperAdminUsuarios';
 import SuperAdminCatalogos from './pages/SuperAdminCatalogos';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -31,6 +32,9 @@ const RoleProtectedRoute = ({ children, requiredPermission }) => {
 };
 
 function AppContent() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.rol?.toLowerCase() === 'superadmin';
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -41,7 +45,7 @@ function AppContent() {
         </ProtectedRoute>
       }>
         {/* Dashboard Principal */}
-        <Route index element={<Dashboard />} />
+        <Route index element={isSuperAdmin ? <Navigate to="/superadmin" replace /> : <Dashboard />} />
 
         {/* Vistas Simultaneadas Temporales para la Navegación, o reales añadidas */}
         <Route path="propiedades" element={<Propiedades />} />
@@ -64,6 +68,11 @@ function AppContent() {
         <Route path="superadmin/empresas" element={
           <RoleProtectedRoute requiredPermission="isSuperAdmin">
             <SuperAdminEmpresas />
+          </RoleProtectedRoute>
+        } />
+        <Route path="superadmin/usuarios" element={
+          <RoleProtectedRoute requiredPermission="isSuperAdmin">
+            <SuperAdminUsuarios />
           </RoleProtectedRoute>
         } />
         <Route path="superadmin/catalogos" element={

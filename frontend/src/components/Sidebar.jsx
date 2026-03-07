@@ -18,6 +18,7 @@ const navItems = [
 const superAdminNavItems = [
     { name: 'SaaS Dashboard', path: '/superadmin', icon: Server },
     { name: 'Empresas', path: '/superadmin/empresas', icon: Building2 },
+    { name: 'SaaS Usuarios', path: '/superadmin/usuarios', icon: Users },
     { name: 'Catálogos', path: '/superadmin/catalogos', icon: FileText },
 ];
 

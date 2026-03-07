@@ -13,7 +13,8 @@ export default function Login() {
     const [isLoading, setIsLoading] = useState(false);
 
     if (user) {
-        return <Navigate to="/" replace />;
+        const isSuperAdmin = user?.rol?.toLowerCase() === 'superadmin';
+        return <Navigate to={isSuperAdmin ? "/superadmin" : "/"} replace />;
     }
 
     const handleSubmit = async (e) => {
