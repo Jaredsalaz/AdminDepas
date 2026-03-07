@@ -99,7 +99,8 @@ def get_empresa_id(request: Request, current_user: models.Usuario = Depends(get_
 
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
-    user = db.query(models.Usuario).filter(models.Usuario.email == form_data.username).first()
+    email_lower = form_data.username.lower()
+    user = db.query(models.Usuario).filter(models.Usuario.email == email_lower).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -115,7 +116,8 @@ def login_for_access_token(db: Session = Depends(get_db), form_data: OAuth2Passw
 
 @router.post("/register", response_model=schemas.UsuarioOut)
 def register_user(user: schemas.UsuarioCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.Usuario).filter(models.Usuario.email == user.email).first()
+    email_lower = user.email.lower()
+    db_user = db.query(models.Usuario).filter(models.Usuario.email == email_lower).first()
     if db_user:
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
     
@@ -123,7 +125,7 @@ def register_user(user: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     new_user = models.Usuario(
         empresa_id=user.empresa_id,
         nombre=user.nombre,
-        email=user.email,
+        email=email_lower,
         hashed_password=hashed_password,
         rol=user.rol
     )

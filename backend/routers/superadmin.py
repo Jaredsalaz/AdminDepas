@@ -141,8 +141,9 @@ def create_empresa_saas(
     
     # Crear Administrador Inicial si se proporcionaron datos
     if empresa.admin_email and empresa.admin_password and empresa.admin_nombre:
+        admin_email_lower = empresa.admin_email.lower()
         # Verificar correo de admin
-        exist_user = db.query(models.Usuario).filter(models.Usuario.email == empresa.admin_email).first()
+        exist_user = db.query(models.Usuario).filter(models.Usuario.email == admin_email_lower).first()
         if exist_user:
             raise HTTPException(status_code=400, detail="El correo del administrador inicial ya está registrado en otro usuario")
             
@@ -150,7 +151,7 @@ def create_empresa_saas(
         db_user = models.Usuario(
             empresa_id=db_empresa.id,
             nombre=empresa.admin_nombre,
-            email=empresa.admin_email,
+            email=admin_email_lower,
             hashed_password=hashed_password,
             rol="Administrador"
         )

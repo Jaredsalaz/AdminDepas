@@ -19,7 +19,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
+# Permitir inyectar la URL de la base de datos (Ej: Producción) temporalmente
+dynamic_url = os.getenv("ALEMBIC_DB_URL", SQLALCHEMY_DATABASE_URL)
+config.set_main_option("sqlalchemy.url", dynamic_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

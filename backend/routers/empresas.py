@@ -50,14 +50,15 @@ def create_empresa(
 
     # Si se proporcionó info del admin, crear el usuario admin de la empresa
     if empresa.admin_email and empresa.admin_password:
-        existing_user = db.query(models.Usuario).filter(models.Usuario.email == empresa.admin_email).first()
+        admin_email_lower = empresa.admin_email.lower()
+        existing_user = db.query(models.Usuario).filter(models.Usuario.email == admin_email_lower).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="El correo del admin ya está registrado en otra empresa")
         
         admin_user = models.Usuario(
             empresa_id=db_empresa.id,
             nombre=empresa.admin_nombre or empresa.nombre,
-            email=empresa.admin_email,
+            email=admin_email_lower,
             hashed_password=get_password_hash(empresa.admin_password),
             rol="Administrador"
         )
